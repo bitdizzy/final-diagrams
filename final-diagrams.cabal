@@ -17,6 +17,10 @@ cabal-version:       >=1.10
 library
   exposed-modules:
     Diagrams.Final
+    Diagrams.Final.Base
+    Diagrams.Final.HasOrigin
+    Diagrams.Final.Measure
+    Diagrams.Final.Transform
   other-modules:
   other-extensions:
   build-depends: base >=4.11 && <4.15
