@@ -1,0 +1,70 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
+signature Diagrams.Final.Sig.Space
+  ( module Diagrams.Final.Sig.Space
+  ) where
+
+import Data.Constraint
+import Linear (Additive, Metric)
+import Linear.Affine (Affine(..))
+
+data Scalar
+instance Num Scalar
+instance Floating Scalar
+instance Fractional Scalar
+instance Eq Scalar
+instance Ord Scalar
+instance Integral Scalar
+
+data Vector :: * -> *
+instance Functor Vector
+instance Foldable Vector
+instance Traversable Vector
+instance Additive Vector
+instance Metric Vector
+
+basis :: Traversable t => t (Vector Scalar)
+
+data Point :: * -> *
+instance Affine Point
+
+origin :: Point Scalar
+
+-- | 'Vector' should be the 'Diff' of 'Point'
+vectorIsDiffPoint :: Dict (Diff Point ~ Vector)
+
+data LinearTransform :: * -> *
+instance (Semigroup (LinearTransform Scalar))
+instance Monoid (LinearTransform Scalar)
+
+inverseLinear :: LinearTransform Scalar -> LinearTransform Scalar
+adjoint :: LinearTransform Scalar -> LinearTransform Scalar
+determinant :: LinearTransform Scalar -> Scalar
+
+scalingBy :: Scalar -> LinearTransform Scalar
+
+data AffineTransform :: * -> *
+instance Semigroup (AffineTransform Scalar)
+instance Monoid (AffineTransform Scalar)
+
+inverseAffine :: AffineTransform Scalar -> AffineTransform Scalar
+translateBy :: Vector Scalar -> AffineTransform Scalar
+
+class LinearAction a where
+  actL :: LinearTransform Scalar -> a -> a
+
+instance LinearAction (Vector Scalar)
+
+class AffineAction a where
+  actA :: AffineTransform Scalar -> a -> a
+
+instance AffineAction (Point Scalar)
+
+linearOf :: AffineTransform Scalar -> LinearTransform Scalar
+translationOf :: AffineTransform Scalar -> Vector Scalar
+
+affineOf :: LinearTransform Scalar -> Vector Scalar -> AffineTransform Scalar

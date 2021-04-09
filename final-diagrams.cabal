@@ -5,28 +5,38 @@ description:
 license: BSD3
 license-file: LICENSE
 author: bitdizzy
-maintainer: me@bitdizzy.io
+maintainer: dev@bitdizzy.io
 copyright: (C) 2020 bitdizzy
 category:            Control
 build-type:          Simple
 extra-source-files: ChangeLog.md
                   , README.md
 
-cabal-version:       >=1.10
+cabal-version: 2.0
 
 library
+  signatures:
+    Diagrams.Final.Sig.Space
+    Diagrams.Final.Sig.Space.TwoD
   exposed-modules:
     Diagrams.Final
     Diagrams.Final.Base
-    Diagrams.Final.HasOrigin
+    Diagrams.Final.Envelope
     Diagrams.Final.Measure
-    Diagrams.Final.Transform
+    Diagrams.Final.Space
+    Diagrams.Final.Trace
+    Diagrams.Final.Trail
+    Diagrams.Final.Type
   other-modules:
   other-extensions:
-  build-depends: base >=4.11 && <4.15
+  build-depends: base >=4.11 && <5
+               , adjunctions
+               , containers
+               , constraints
                , intervals
                , lens
                , linear
+               , semigroupoids
   hs-source-dirs: src
   default-language: Haskell2010
   ghc-options: -Wall -hide-all-packages

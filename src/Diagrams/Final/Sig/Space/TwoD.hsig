@@ -1,0 +1,26 @@
+signature Diagrams.Final.Sig.Space.TwoD where
+
+import Linear
+
+import Diagrams.Final.Space
+
+ex :: E Vector
+ey :: E Vector
+
+-- | Counter-clockwise, in radians
+rotation :: Scalar -> LinearTransform Scalar
+
+-- | Horizontal shear preserves the x-axis
+shearX :: Scalar -> LinearTransform Scalar
+
+-- | Vertical shear preserves the y-axis
+shearY :: Scalar -> LinearTransform Scalar
+
+scaleX :: Scalar -> LinearTransform Scalar
+scaleY :: Scalar -> LinearTransform Scalar
+
+-- | Reflection around the x-axis preserves the x-axis
+reflectX :: LinearTransform Scalar
+
+-- | Reflection around the y-axis preserves the y-axis
+reflectY :: LinearTransform Scalar
