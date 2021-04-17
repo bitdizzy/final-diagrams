@@ -8,7 +8,9 @@ signature Diagrams.Final.Sig.Space
   ( module Diagrams.Final.Sig.Space
   ) where
 
+import Control.Lens
 import Data.Constraint
+import Data.Functor.Product
 import Linear (Additive, Metric)
 import Linear.Affine (Affine(..))
 
@@ -18,7 +20,6 @@ instance Floating Scalar
 instance Fractional Scalar
 instance Eq Scalar
 instance Ord Scalar
-instance Integral Scalar
 
 data Vector :: * -> *
 instance Functor Vector
@@ -27,44 +28,53 @@ instance Traversable Vector
 instance Additive Vector
 instance Metric Vector
 
-basis :: Traversable t => t (Vector Scalar)
+basis :: forall n. Num n => [Vector n]
 
 data Point :: * -> *
 instance Affine Point
+instance Functor Point
 
-origin :: Point Scalar
+origin :: forall n. Num n => Point n
 
 -- | 'Vector' should be the 'Diff' of 'Point'
 vectorIsDiffPoint :: Dict (Diff Point ~ Vector)
 
+class Diff p ~ v => IsDiffOf p v
+
+instance IsDiffOf Point Vector
+
 data LinearTransform :: * -> *
-instance (Semigroup (LinearTransform Scalar))
-instance Monoid (LinearTransform Scalar)
+instance Functor LinearTransform
+instance (Semigroup (LinearTransform a))
+instance Monoid (LinearTransform a)
 
-inverseLinear :: LinearTransform Scalar -> LinearTransform Scalar
-adjoint :: LinearTransform Scalar -> LinearTransform Scalar
-determinant :: LinearTransform Scalar -> Scalar
+inverseLinear :: forall n. Num n => LinearTransform n -> LinearTransform n
+adjoint :: forall n. Num n => LinearTransform n -> LinearTransform n
+det :: forall n. Num n => LinearTransform n -> n
 
-scalingBy :: Scalar -> LinearTransform Scalar
+scalingBy :: forall n. Num n => n -> LinearTransform n
 
 data AffineTransform :: * -> *
-instance Semigroup (AffineTransform Scalar)
-instance Monoid (AffineTransform Scalar)
+instance Functor AffineTransform
+instance Semigroup (AffineTransform a)
+instance Monoid (AffineTransform a)
 
-inverseAffine :: AffineTransform Scalar -> AffineTransform Scalar
-translateBy :: Vector Scalar -> AffineTransform Scalar
+inverseAffine :: forall n. Num n => AffineTransform n -> AffineTransform n
+translateBy :: forall n. Num n => Vector n -> AffineTransform n
 
-class LinearAction a where
-  actL :: LinearTransform Scalar -> a -> a
+class LinearAction n a | a -> n where
+  actL :: LinearTransform n -> a -> a
 
-instance LinearAction (Vector Scalar)
+instance forall n. Num n => LinearAction n (Vector n)
 
-class AffineAction a where
-  actA :: AffineTransform Scalar -> a -> a
+class AffineAction n a | a -> n where
+  actA :: AffineTransform n -> a -> a
 
-instance AffineAction (Point Scalar)
+instance forall n. Num n => AffineAction n (Point n)
 
-linearOf :: AffineTransform Scalar -> LinearTransform Scalar
-translationOf :: AffineTransform Scalar -> Vector Scalar
+class RelativeTo n a b | a -> n b where
+  relativeTo :: Point n -> Iso' a b
+  relativeToOrigin :: Iso' a b
 
-affineOf :: LinearTransform Scalar -> Vector Scalar -> AffineTransform Scalar
+instance forall n. Num n => RelativeTo n (AffineTransform n) (Product LinearTransform Vector n)
+instance forall n. Num n => RelativeTo n (Point n) (Vector n)

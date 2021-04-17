@@ -25,7 +25,6 @@ library
     Diagrams.Final.Measure
     Diagrams.Final.Space
     Diagrams.Final.Trace
-    Diagrams.Final.Trail
     Diagrams.Final.Type
   other-modules:
   other-extensions:

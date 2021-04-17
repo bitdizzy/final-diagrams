@@ -2,7 +2,7 @@ signature Diagrams.Final.Sig.Space.TwoD where
 
 import Linear
 
-import Diagrams.Final.Space
+import Diagrams.Final.Sig.Space
 
 ex :: E Vector
 ey :: E Vector
