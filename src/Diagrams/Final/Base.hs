@@ -24,12 +24,9 @@ import Control.Applicative
 import Control.Lens
 import Control.Monad
 import Data.Coerce
-import Data.Kind
 import Data.Monoid
 import Data.Set (Set)
 import qualified Data.Set as Set
-
-type Representational f = (forall a b. Coercible a b => Coercible (f a) (f b) :: Constraint)
 
 --
 -- HOAS
@@ -237,14 +234,10 @@ class Semigroup' a repr where
   default (%<>) :: (Semigroup a, Applicative repr) => repr a -> repr a -> repr a
   (%<>) = liftA2 (<>)
 
-instance Semigroup a => Semigroup' a Identity
-
 class Semigroup' a repr => Monoid' a repr where
   mempty' :: repr a
   default mempty' :: (Monoid a, Applicative repr) => repr a
   mempty' = pure mempty
-
-instance Monoid a => Monoid' a Identity
 
 class Num (repr a) => Num' a repr where
   plus' :: repr a -> repr a -> repr a
@@ -431,6 +424,9 @@ fromIntegral' = fromInteger' . toInteger'
 
 newtype Lift1 repr f a = Lift1 { unLift1 :: f (repr a) }
   deriving (Semigroup, Monoid)
+
+unlift1 :: (Monad repr, Traversable f) => repr (Lift1 repr f a) -> repr (f a)
+unlift1 = (join .) $ fmap $ \(Lift1 fa) -> sequence fa
 
 newtype Lift2 repr f a b = Lift2 { unLift2 :: f (repr a) (repr b) }
 

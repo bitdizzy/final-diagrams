@@ -19,6 +19,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module Diagrams.Final.Space
   ( module Diagrams.Final.Space
   , module X
@@ -27,15 +28,24 @@ module Diagrams.Final.Space
 import Control.Applicative
 import Control.Lens
 import Control.Monad
-import Data.Constraint
 import Data.Functor.Product
 import Linear hiding (basis)
 import Linear.Affine (Affine(..))
 
-import qualified Diagrams.Final.Sig.Space as T
-import Diagrams.Final.Sig.Space as X (Scalar)
+import qualified Diagrams.Final.Space.Primitive as T
+import Diagrams.Final.Space.Primitive as X (Scalar)
 
 import Diagrams.Final.Base
+
+class Num' a repr => Conjugate' a repr where
+  conjugate' :: repr a -> repr a
+  default conjugate' :: (Conjugate a, Functor repr) => repr a -> repr a
+  conjugate' = fmap conjugate
+
+instance Conjugate' a repr => Conjugate (L repr a) where
+  conjugate (L x) = L $ conjugate' x
+
+instance Conjugate a => Conjugate' a Identity
 
 class Functor' f repr => Additive' f repr where
   zero' :: Num' a repr => repr (f a)
@@ -90,9 +100,6 @@ class Additive' (Diff' p repr) repr => Affine' p repr where
 instance (Functor p, Affine p, Additive' (Diff' (Lift1 Identity p) Identity) Identity) => Affine' (Lift1 Identity p) Identity where
   type Diff' (Lift1 Identity p) Identity = Lift1 Identity (Diff p)
 
-class NoConstraint x
-instance NoConstraint x
-
 class (LinearAction' n (Vector repr n) repr, AffineAction' n (Point repr n) repr) => SpatialClass repr n
 instance (LinearAction' n (Vector repr n) repr, AffineAction' n (Point repr n) repr) => SpatialClass repr n
 
@@ -101,7 +108,7 @@ type SpatialConstraints repr =
    , Integral' Int repr
    , LiftMaybe repr, LiftList repr
    , Functor' (List' repr) repr, Foldable' (List' repr) repr
-   , Num' Scalar repr, Floating' Scalar repr, Fractional' Scalar repr, Eq' Scalar repr, Ord' Scalar repr
+   , Conjugate' Scalar repr, Num' Scalar repr, Floating' Scalar repr, Fractional' Scalar repr, Eq' Scalar repr, Ord' Scalar repr
    , Functor' (Vector repr) repr, Foldable' (Vector repr) repr, Additive' (Vector repr) repr
    , Metric' (Vector repr) repr, Affine' (Point repr) repr, Diff' (Point repr) repr ~ Vector repr
    , Semigroup' (LinearTransform repr Scalar) repr, Monoid' (LinearTransform repr Scalar) repr
@@ -109,15 +116,11 @@ type SpatialConstraints repr =
    )
 
 class
-  ( Representational repr
-  , SpatialConstraints repr
+  ( SpatialConstraints repr
   -- This should be a quantified constraint over n s.t. Num' n repr,
   -- but GHC doesn't like type families in quantified constraints
-  , NumConstr repr Scalar
-  , forall n. (NumConstr repr n, Num' n repr) => SpatialClass repr n
+  , SpatialClass repr Scalar
   ) => Spatial repr where
-  type NumConstr repr :: * -> Constraint
-  type NumConstr repr = NoConstraint
   type Vector repr :: * -> *
   type Vector repr = Lift1 repr T.Vector
   type Point repr :: * -> *
@@ -134,10 +137,10 @@ class
     :: forall n. Num' n repr
     => repr (Point repr n)
   inverseLinear
-    :: forall n. Num' n repr
+    :: forall n. (Fractional' n repr, Num' n repr)
     => repr (LinearTransform repr n) -> repr (LinearTransform repr n)
   adjoint
-    :: forall n. Num' n repr
+    :: forall n. (Num' n repr, Conjugate' n repr)
     => repr (LinearTransform repr n) -> repr (LinearTransform repr n)
   det
     :: forall n. Num' n repr
@@ -146,7 +149,7 @@ class
     :: forall n. Num' n repr
     => repr n -> repr (LinearTransform repr n)
   inverseAffine
-    :: forall n. Num' n repr
+    :: forall n. (Fractional' n repr, Num' n repr)
     => repr (AffineTransform repr n) -> repr (AffineTransform repr n)
   translateBy
     :: forall n. Num' n repr
@@ -169,11 +172,11 @@ class
     => repr (Point repr n)
   origin = pure $ Lift1 $ fmap unL $ T.origin
   default inverseLinear
-    :: (Num' n repr, Applicative repr, LinearTransform repr ~ Lift1 repr T.LinearTransform)
+    :: (Fractional' n repr, Num' n repr, Applicative repr, LinearTransform repr ~ Lift1 repr T.LinearTransform)
     => repr (LinearTransform repr n) -> repr (LinearTransform repr n)
   inverseLinear = fmap $ \(Lift1 t) -> Lift1 $ fmap unL $ T.inverseLinear $ fmap L t
   default adjoint
-    :: (Num' n repr, Applicative repr, LinearTransform repr ~ Lift1 repr T.LinearTransform)
+    :: (Conjugate' n repr, Num' n repr, Applicative repr, LinearTransform repr ~ Lift1 repr T.LinearTransform)
     => repr (LinearTransform repr n) -> repr (LinearTransform repr n)
   adjoint = fmap $ \(Lift1 t) -> Lift1 $ fmap unL $ T.adjoint $ fmap L t
   default det
@@ -185,7 +188,7 @@ class
     => repr n -> repr (LinearTransform repr n)
   scalingBy = pure . Lift1 . fmap unL . T.scalingBy . L
   default inverseAffine
-    :: (Num' n repr, Applicative repr, AffineTransform repr ~ Lift1 repr T.AffineTransform)
+    :: (Fractional' n repr, Num' n repr, Applicative repr, AffineTransform repr ~ Lift1 repr T.AffineTransform)
     => repr (AffineTransform repr n) -> repr (AffineTransform repr n)
   inverseAffine = fmap $ \(Lift1 t) -> Lift1 $ fmap unL $ T.inverseAffine $ fmap L t
   default translateBy
@@ -206,10 +209,18 @@ class
   affineOf = liftA2 $ \(Lift1 l) (Lift1 v) -> Lift1 $ fmap unL $ view (from T.relativeToOrigin) $
     Pair (fmap L l) (fmap L v)
 
+aff :: (Spatial repr, Num' n repr) => repr (LinearTransform repr n) -> repr (AffineTransform repr n)
+aff l = affineOf l zero'
+
+instance Semigroup' (Lift1 Identity T.LinearTransform Scalar) Identity
+instance Monoid' (Lift1 Identity T.LinearTransform Scalar) Identity
+instance Semigroup' (Lift1 Identity T.AffineTransform Scalar) Identity
+instance Monoid' (Lift1 Identity T.AffineTransform Scalar) Identity
+
 instance T.IsDiffOf T.Point T.Vector => Spatial Identity
 
 -- Work around GHC #14860
-withSpatial :: forall repr n r. (NumConstr repr n, Num' n repr, Spatial repr) => ((SpatialClass repr n) => r) -> r
+withSpatial :: forall repr n r. (SpatialClass repr n, Spatial repr) => ((SpatialClass repr n) => r) -> r
 withSpatial f = f
 
 class LinearAction' n a repr | a -> n where

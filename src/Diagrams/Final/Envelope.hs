@@ -17,15 +17,17 @@ import Control.Lens hiding (re)
 import Diagrams.Final.Base
 import Diagrams.Final.Space
 
-newtype Envelope repr = Envelope { unEnvelope :: Maybe' repr (Arr repr (Vector repr Scalar) Scalar) }
+newtype DefaultEnvelope repr = DefaultEnvelope { unDefaultEnvelope :: Maybe' repr (Arr repr (Vector repr Scalar) Scalar) }
 
-instance Wrapped (Envelope repr) where
-  type Unwrapped (Envelope repr) = Maybe' repr (Arr repr (Vector repr Scalar) Scalar)
-  _Wrapped' = iso (\(Envelope e) -> e) Envelope
+instance Wrapped (DefaultEnvelope repr) where
+  type Unwrapped (DefaultEnvelope repr) = Maybe' repr (Arr repr (Vector repr Scalar) Scalar)
+  _Wrapped' = iso (\(DefaultEnvelope e) -> e) DefaultEnvelope
 
-instance Rewrapped (Envelope repr) (Envelope repr)
+instance Rewrapped (DefaultEnvelope repr) (DefaultEnvelope repr)
 
-class Spatial repr => Envelopes repr where
+class (Spatial repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Envelope repr) repr) => Envelopes repr where
+  type Envelope repr :: *
+  type Envelope repr = DefaultEnvelope repr
   emptyEnvelope :: repr (Envelope repr)
   envelope
     :: repr (Arr repr (Vector repr Scalar) Scalar)
@@ -40,40 +42,43 @@ class Spatial repr => Envelopes repr where
     -> repr (Envelope repr)
     -> repr (Envelope repr)
   default emptyEnvelope
-    :: (Applicative repr, Maybe' repr ~ Lift1 repr Maybe)
+    :: (Applicative repr, Maybe' repr ~ Lift1 repr Maybe, Envelope repr ~ DefaultEnvelope repr)
     => repr (Envelope repr)
-  emptyEnvelope = pure $ Envelope $ Lift1 Nothing
+  emptyEnvelope = pure $ DefaultEnvelope $ Lift1 Nothing
   default envelope
-    :: (Functor repr, LiftMaybe repr)
+    :: (Functor repr, LiftMaybe repr, Envelope repr ~ DefaultEnvelope repr)
     => repr (Arr repr (Vector repr Scalar) Scalar)
     -> repr (Envelope repr)
-  envelope = fmap Envelope . just'
+  envelope = fmap DefaultEnvelope . just'
   default withEnvelope
-    :: (Functor repr, LiftMaybe repr)
+    :: (Functor repr, LiftMaybe repr, Envelope repr ~ DefaultEnvelope repr)
     => repr (Envelope repr)
     -> repr a
     -> repr (Arr repr (Arr repr (Vector repr Scalar) Scalar) a)
     -> repr a
-  withEnvelope e k0 k1 = maybe' k0 k1 (fmap unEnvelope e)
+  withEnvelope e k0 k1 = maybe' k0 k1 (fmap unDefaultEnvelope e)
   default onEnvelope
-    :: (Functor repr, LiftMaybe repr, Lambda repr)
+    :: (Functor repr, LiftMaybe repr, Lambda repr, Envelope repr ~ DefaultEnvelope repr)
     => repr (Arr repr (Arr repr (Vector repr Scalar) Scalar) (Arr repr (Vector repr Scalar) Scalar))
     -> repr (Envelope repr)
     -> repr (Envelope repr)
-  onEnvelope f = maybe' emptyEnvelope (lam (envelope . app f)) . fmap unEnvelope
+  onEnvelope f = maybe' emptyEnvelope (lam (envelope . app f)) . fmap unDefaultEnvelope
 
 instance Envelopes Identity
 
-instance Envelopes repr => AffineAction' Scalar (Envelope repr) repr where
+instance (Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => AffineAction' Scalar (DefaultEnvelope repr) repr where
   actA' a = withSpatial @repr @Scalar $ onEnvelope $ lam $ \f -> lam $ \v ->
     let_ (linearOf a) $ \l ->
       let_ (translationOf a) $ \t ->
         let_ (actL' (adjoint l) v) $ \v' ->
            (quadrance' v' %* (f %$ v') %+ v `dot'` t) %/ quadrance' v
 
-instance Envelopes repr => Semigroup' (Envelope repr) repr where
+instance (Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => Semigroup' (DefaultEnvelope repr) repr where
   e1 %<> e2 = withEnvelope e1 e2 $ lam $ \f1 -> withEnvelope e2 emptyEnvelope $ lam $ \f2 ->
    envelope $ lam $ \v -> max' (f1 %$ v) (f2 %$ v)
+
+instance (Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => Monoid' (DefaultEnvelope repr) repr where
+  mempty' = emptyEnvelope
 
 extent
   :: (Envelopes repr, LiftMaybe repr, Lambda repr, Tuple2 repr)

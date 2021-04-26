@@ -1,3 +1,4 @@
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -5,7 +6,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
@@ -14,15 +14,13 @@
 {-# LANGUAGE UndecidableSuperClasses #-}
 module Diagrams.Final.Type where
 
-import Control.Applicative
-import Control.Lens
-import Data.Coerce
 import Data.Kind
 import Data.Monoid
-import Linear (Additive, Metric)
+import Data.Set (Set)
+import Linear (Additive, Metric, Conjugate)
 import Linear.Affine (Affine(type Diff))
 
-import qualified Diagrams.Final.Sig.Space as T
+import qualified Diagrams.Final.Space.Primitive as T
 import Diagrams.Final.Base
 import Diagrams.Final.Envelope
 import Diagrams.Final.Measure
@@ -51,6 +49,8 @@ class ( Envelopes repr, Traces repr, Scales repr
       , AffineAction' Scalar (Prim repr) repr
       , AffineAction' Scalar (Diagram repr) repr
       ) => Diagrams repr where
+  type Diagram repr :: Type
+  type Diagram repr = DefaultDiagram repr
   type Prim repr :: Type
   type Style repr :: Type
   type Ann repr :: Type
@@ -58,17 +58,67 @@ class ( Envelopes repr, Traces repr, Scales repr
   delayed :: repr (Envelope repr) -> repr (Trace repr) -> repr (Scaled repr (Diagram repr)) -> repr (Diagram repr)
   ann :: repr (Ann repr) -> repr (Diagram repr) -> repr (Diagram repr)
   style :: repr (Style repr) -> repr (Diagram repr) -> repr (Diagram repr)
+  default prim :: (Applicative repr, Diagram repr ~ DefaultDiagram repr) => repr (Envelope repr) -> repr (Trace repr) -> repr (Prim repr) -> repr (Diagram repr)
+  prim e tr p = pure $ DefaultDiagram $ \_ _ _ pr _ _ -> pr (DiagramContext e tr) p
+  default delayed :: (Applicative repr, Diagram repr ~ DefaultDiagram repr) => repr (Envelope repr) -> repr (Trace repr) -> repr (Scaled repr (Diagram repr)) -> repr (Diagram repr)
+  delayed e tr p = pure $ DefaultDiagram $ \_ _ _ _ delayed' _ -> delayed' (DiagramContext e tr) p
+  default ann :: (Functor repr, Diagram repr ~ DefaultDiagram repr) => repr (Ann repr) -> repr (Diagram repr) -> repr (Diagram repr)
+  ann x = fmap $ \(DefaultDiagram d) -> DefaultDiagram $ \t s a p delayed' l -> a x $ d t s a p delayed' l
+  default style :: (Functor repr, Diagram repr ~ DefaultDiagram repr) => repr (Style repr) -> repr (Diagram repr) -> repr (Diagram repr)
+  style x = fmap $ \(DefaultDiagram d) -> DefaultDiagram $ \t s a p delayed' l -> s x $ d t s a p delayed' l
 
 -- | Reference implementation of non-empty diagrams
-newtype Diagram repr = Diagram
-  { unDiagram
-      :: forall r. (repr (Style repr) -> r -> r)
+newtype DefaultDiagram repr = DefaultDiagram
+  { unDefaultDiagram
+      :: forall r. (repr (AffineTransform repr Scalar) -> r -> r)
+      -> (repr (Style repr) -> r -> r)
       -> (repr (Ann repr) -> r -> r)
-      -> (repr (Prim repr) -> r)
-      -> (repr (Scaled repr (Diagram repr)) -> r)
+      -> (DiagramContext repr -> repr (Prim repr) -> r)
+      -> (DiagramContext repr -> repr (Scaled repr (Diagram repr)) -> r)
       -> (r -> r -> r)
-      -> (DiagramContext repr, r)
+      -> r
   }
+
+instance (Monad repr) => Semigroup (DefaultDiagram repr) where
+  DefaultDiagram d0 <> DefaultDiagram d1 = DefaultDiagram $ \t s a p d l ->
+    let r0 = d0 t s a p d l
+        r1 = d1 t s a p d l
+     in l r0 r1
+
+instance
+  ( AffineAction' Scalar (Style repr) repr
+  , AffineAction' Scalar (Prim repr) repr
+  , Monad repr
+  , Envelopes repr
+  , Traces repr
+  , Diagram repr ~ DefaultDiagram repr
+  ) => AffineAction' Scalar (DefaultDiagram repr) repr where
+  actA' tf = fmap $ \(DefaultDiagram d) -> DefaultDiagram $ \t s a p l m -> t tf $ d t s a p l m
+
+renderDiagramM
+  :: (Monad repr, Diagrams repr, Diagram repr ~ DefaultDiagram repr)
+  => repr (Diagram repr)
+  -> repr (AffineTransform repr Scalar)
+  -- ^ Transformation from global diagram coordinates to output coordinates
+  -> (repr (AffineTransform repr Scalar) -> r -> r)
+  -> (repr (Style repr) -> r -> r)
+  -> (repr (Ann repr) -> r -> r)
+  -> (repr (Prim repr) -> r)
+  -> (DiagramContext repr -> r -> r)
+  -> (r -> r -> r)
+  -> (repr r -> r)
+  -> (r -> DiagramContext repr)
+  -> repr r
+renderDiagramM d' tf0 t s a p attachContext l f getCtx = flip fmap (actA' tf0 d') $ \(DefaultDiagram d) ->
+  -- Tie the knot to instantiate parts of the diagram that depend on
+  -- the global context.
+  let runPrim c x = attachContext c $ p x
+      runDelayed preCtx dl =
+        let dl' = withScaleOf dl tf0 (_diagramContext_envelope finalContext)
+         in attachContext preCtx $ f (flip fmap dl' $ \x -> unDefaultDiagram x t s a runPrim runDelayed l)
+      finalDiagram = d t s a runPrim runDelayed l
+      finalContext = getCtx finalDiagram
+   in finalDiagram
 
 newtype MonadicDiagram repr prim style ann a = MonadicDiagram { unMonadicDiagram :: repr a }
   deriving (Functor, Applicative, Monad)
@@ -86,6 +136,7 @@ instance Monad repr => Tuple3 (MonadicDiagram repr prim style ann)
 instance (Eq n, Monad repr) => Eq' n (MonadicDiagram repr prim style ann)
 instance (Ord n, Monad repr) => Ord' n (MonadicDiagram repr prim style ann)
 instance (Num n, Monad repr) => Num' n (MonadicDiagram repr prim style ann)
+instance (Conjugate n, Monad repr) => Conjugate' n (MonadicDiagram repr prim style ann)
 instance (Real n, Monad repr) => Real' n (MonadicDiagram repr prim style ann)
 instance (Enum n, Monad repr) => Enum' n (MonadicDiagram repr prim style ann)
 instance (Integral n, Monad repr) => Integral' n (MonadicDiagram repr prim style ann)
@@ -98,77 +149,23 @@ instance (Additive f, Monad repr) => Additive' (Lift1 (MonadicDiagram repr prim 
 instance (Metric f, Monad repr) => Metric' (Lift1 (MonadicDiagram repr prim style ann) f) (MonadicDiagram repr prim style ann)
 instance (Functor f, Affine f, Monad repr) => Affine' (Lift1 (MonadicDiagram repr prim style ann) f) (MonadicDiagram repr prim style ann) where
   type Diff' (Lift1 (MonadicDiagram repr prim style ann) f) (MonadicDiagram repr prim style ann) = Lift1 (MonadicDiagram repr prim style ann) (Diff f)
-instance (Semigroup a, Monad repr) => Semigroup' a (MonadicDiagram repr prim style ann)
-instance (Monoid a, Monad repr) => Monoid' a (MonadicDiagram repr prim style ann)
 instance (forall x. Num x => T.LinearAction x (f x), Num n, Functor f, Monad repr) => LinearAction' n (Lift1 (MonadicDiagram repr prim style ann) f n) (MonadicDiagram repr prim style ann)
 instance (forall x. Num x => T.AffineAction x (f x), Num n, Functor f, Monad repr) => AffineAction' n (Lift1 (MonadicDiagram repr prim style ann) f n) (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftMaybe (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftList (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftSet (MonadicDiagram repr prim style ann)
 
-instance (T.IsDiffOf T.Point T.Vector, Representational repr, Monad repr) => Spatial (MonadicDiagram repr prim style ann) where
-  type NumConstr (MonadicDiagram repr prim style ann) = Num
+instance Monad repr => Semigroup' (Lift1 (MonadicDiagram repr prim style ann) T.LinearTransform Scalar) (MonadicDiagram repr prim style ann)
+instance Monad repr => Monoid' (Lift1 (MonadicDiagram repr prim style ann) T.LinearTransform Scalar) (MonadicDiagram repr prim style ann)
+instance Monad repr => Semigroup' (Lift1 (MonadicDiagram repr prim style ann) T.AffineTransform Scalar) (MonadicDiagram repr prim style ann)
+instance Monad repr => Monoid' (Lift1 (MonadicDiagram repr prim style ann) T.AffineTransform Scalar) (MonadicDiagram repr prim style ann)
+instance Monad repr => Semigroup' (Set Scalar) (MonadicDiagram repr prim style ann)
+instance Monad repr => Monoid' (Set Scalar) (MonadicDiagram repr prim style ann)
 
-instance (T.IsDiffOf T.Point T.Vector, Representational repr, Monad repr) => Envelopes (MonadicDiagram repr prim style ann)
-instance (T.IsDiffOf T.Point T.Vector, Representational repr, Monad repr) => Scales (MonadicDiagram repr prim style ann)
-instance (T.IsDiffOf T.Point T.Vector, Representational repr, Monad repr) => Traces (MonadicDiagram repr prim style ann)
+instance (Monad repr, T.IsDiffOf T.Point T.Vector) => Semigroup' (DefaultDiagram (MonadicDiagram repr prim style ann)) (MonadicDiagram repr prim style ann)
 
-instance (Monad repr, Envelopes repr, Traces repr) => Semigroup (Diagram repr) where
-  Diagram d0 <> Diagram d1 = Diagram $ \s a p d l ->
-    let (ctx0, r0) = d0 s a p d l
-        (ctx1, r1) = d1 s a p d l
-     in (ctx0 <> ctx1, l r0 r1)
+instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Spatial (MonadicDiagram repr prim style ann)
 
-instance
-  ( Representational repr
-  , Monad repr
-  , Semigroup style
-  , AffineAction' Scalar style (MonadicDiagram repr prim style ann)
-  , AffineAction' Scalar prim (MonadicDiagram repr prim style ann)
-  ) => Diagrams (MonadicDiagram repr prim style ann) where
-  type Prim (MonadicDiagram repr prim style ann) = prim
-  type Style (MonadicDiagram repr prim style ann) = style
-  type Ann (MonadicDiagram repr prim style ann) = ann
-  prim e tr p = pure $ Diagram $ \_ _ pr _ _ ->
-    (DiagramContext e tr, pr p)
-  delayed e tr p = pure $ Diagram $ \_ _ _ delayed' _ ->
-    (DiagramContext e tr, delayed' p)
-  ann x = fmap $ \(Diagram d) -> Diagram $ \s a p delayed' l -> fmap (a x) (d s a p delayed' l)
-  style x = fmap $ \(Diagram d) -> Diagram $ \s -> d (s . flip (liftA2 (<>)) x)
-
-instance
-  ( AffineAction' Scalar style (MonadicDiagram repr prim style ann)
-  , AffineAction' Scalar prim (MonadicDiagram repr prim style ann)
-  , Representational repr
-  , Monad repr
-  ) => AffineAction' Scalar (Diagram (MonadicDiagram repr prim style ann)) (MonadicDiagram repr prim style ann) where
-  actA' t = fmap $ \(Diagram d) -> Diagram $ \s a p l -> fmap (_1 %~ transformContext') $ d
-    (s . actA' t)
-    a
-    (p . actA' t)
-    l
-   where
-    transformContext' (DiagramContext (MonadicDiagram e) (MonadicDiagram tr)) =
-     let DiagramContext e' tr' = transformContext t $ DiagramContext (coerce e) (coerce tr)
-      in DiagramContext (MonadicDiagram (coerce e')) (MonadicDiagram (coerce tr'))
-
-renderDiagramM
-  :: (Monad repr, Diagrams repr)
-  => repr (Diagram repr)
-  -> repr (AffineTransform repr Scalar)
-  -- ^ Transformation from global diagram coordinates to output coordinates
-  -> (repr (Style repr) -> r -> r)
-  -> (repr (Ann repr) -> r -> r)
-  -> (repr (Prim repr) -> r)
-  -> (r -> r -> r)
-  -> (repr r -> r)
-  -> repr r
-renderDiagramM d' t s a p l f = flip fmap (actA' t d') $ \(Diagram d) ->
-  -- Tie the knot to instantiate parts of the diagram that depend on
-  -- the global context.
-  let runDelayed dl =
-        let dl' = withScaleOf dl t (_diagramContext_envelope finalContext)
-         in f (flip fmap dl' $ \x -> snd $ unDiagram x s a p runDelayed l)
-      (finalContext, finalDiagram) = d s a p runDelayed l
-   in finalDiagram
-
+instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Envelopes (MonadicDiagram repr prim style ann)
+instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Scales (MonadicDiagram repr prim style ann)
+instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Traces (MonadicDiagram repr prim style ann)

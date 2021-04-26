@@ -8,6 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 module Diagrams.Final.Measure where
@@ -22,14 +23,16 @@ newtype LocalScale = LocalScale { unLocalScale :: Scalar }
 newtype GlobalScale = GlobalScale { unGlobalScale :: Scalar }
 newtype NormalizedScale = NormalizedScale { unNormalizedScale :: Scalar }
 
-newtype Scaled repr a = Scaled
-    { unScaled
+newtype DefaultScaled repr a = DefaultScaled
+    { unDefaultScaled
         :: Arr repr (AffineTransform repr Scalar) (Arr repr GlobalScale (Arr repr NormalizedScale a))
     }
 
 type Measure repr = Scaled repr Scalar
 
-class Spatial repr => Scales repr where
+class (Spatial repr, forall a. AffineAction' Scalar (Scaled repr a) repr) => Scales repr where
+  type Scaled repr :: * -> *
+  type Scaled repr = DefaultScaled repr
   toLocalScale :: repr Scalar -> repr LocalScale
   fromLocalScale :: repr LocalScale -> repr Scalar
   toGlobalScale :: repr Scalar -> repr GlobalScale
@@ -50,10 +53,10 @@ class Spatial repr => Scales repr where
   toNormalizedScale = fmap NormalizedScale
   default fromNormalizedScale :: Functor repr => repr NormalizedScale -> repr Scalar
   fromNormalizedScale = fmap unNormalizedScale
-  default toScaled :: Functor repr => repr (Arr repr (AffineTransform repr Scalar) (Arr repr GlobalScale (Arr repr NormalizedScale a))) -> repr (Scaled repr a)
-  toScaled = fmap Scaled
-  default fromScaled :: Functor repr => repr (Scaled repr a) -> repr (AffineTransform repr Scalar) -> repr GlobalScale -> repr NormalizedScale -> repr a
-  fromScaled rf rt rg rn = fmap unScaled rf %$ rt %$ rg %$ rn
+  default toScaled :: (Functor repr, Scaled repr ~ DefaultScaled repr) => repr (Arr repr (AffineTransform repr Scalar) (Arr repr GlobalScale (Arr repr NormalizedScale a))) -> repr (Scaled repr a)
+  toScaled = fmap DefaultScaled
+  default fromScaled :: (Functor repr, Scaled repr ~ DefaultScaled repr) => repr (Scaled repr a) -> repr (AffineTransform repr Scalar) -> repr GlobalScale -> repr NormalizedScale -> repr a
+  fromScaled rf rt rg rn = fmap unDefaultScaled rf %$ rt %$ rg %$ rn
 
 instance Scales Identity
 
@@ -70,7 +73,7 @@ scaled f = toScaled $ lam $ \t -> lam $ \g -> lam $ \n -> f
   %$ fromGlobalScale g
   %$ fromNormalizedScale n
 
-instance (Lambda repr, Scales repr) => AffineAction' Scalar (Scaled repr a) repr where
+instance (Lambda repr, Scales repr, Scaled repr ~ DefaultScaled repr) => AffineAction' Scalar (DefaultScaled repr a) repr where
   actA' t f = toScaled $ lam $ \t' -> lam $ \g -> lam $ \n -> fromScaled f (t' %<> t) g n
 
 withScaleOf
