@@ -45,7 +45,7 @@ instance Monoid' (Set Scalar) Identity
 instance Traces Identity
 
 instance (Lambda repr, Traces repr, Trace repr ~ DefaultTrace repr) => AffineAction' Scalar (DefaultTrace repr) repr where
-  actA' a t = withSpatial @repr @Scalar $
+  actA' a t =
     let_ (linearOf a) $ \l ->
       toTrace $ lam $ \p -> lam $ \v ->
         fromTrace t (actA' (inverseAffine a) p) (actL' (inverseLinear l) v)

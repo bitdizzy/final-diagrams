@@ -67,7 +67,7 @@ class (Spatial repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Enve
 instance Envelopes Identity
 
 instance (Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => AffineAction' Scalar (DefaultEnvelope repr) repr where
-  actA' a = withSpatial @repr @Scalar $ onEnvelope $ lam $ \f -> lam $ \v ->
+  actA' a = onEnvelope $ lam $ \f -> lam $ \v ->
     let_ (linearOf a) $ \l ->
       let_ (translationOf a) $ \t ->
         let_ (actL' (adjoint l) v) $ \v' ->

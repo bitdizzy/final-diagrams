@@ -219,10 +219,6 @@ instance Monoid' (Lift1 Identity T.AffineTransform Scalar) Identity
 
 instance T.IsDiffOf T.Point T.Vector => Spatial Identity
 
--- Work around GHC #14860
-withSpatial :: forall repr n r. (SpatialClass repr n, Spatial repr) => ((SpatialClass repr n) => r) -> r
-withSpatial f = f
-
 class LinearAction' n a repr | a -> n where
   actL' :: repr (LinearTransform repr n) -> repr a -> repr a
   default actL'
