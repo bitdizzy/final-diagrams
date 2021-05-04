@@ -27,7 +27,7 @@ instance Wrapped (DefaultTrace repr) where
 
 instance Rewrapped (DefaultTrace repr) (DefaultTrace repr)
 
-class (Spatial repr, Monoid' (Set' repr Scalar) repr, AffineAction' Scalar (Trace repr) repr, Semigroup' (Trace repr) repr) => Traces repr where
+class (Spatial repr, Monoid' (Set' repr Scalar) repr, AffineAction' Scalar (Trace repr) repr, Semigroup' (Trace repr) repr, Monoid' (Trace repr) repr) => Traces repr where
   type Trace repr :: *
   type Trace repr = DefaultTrace repr
   emptyTrace :: repr (Trace repr)

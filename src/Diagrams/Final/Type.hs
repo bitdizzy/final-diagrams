@@ -1,8 +1,10 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes #-}
@@ -14,6 +16,9 @@
 {-# LANGUAGE UndecidableSuperClasses #-}
 module Diagrams.Final.Type where
 
+import Control.Arrow
+import Control.Lens
+import Control.Monad
 import Data.Kind
 import Data.Monoid
 import Data.Set (Set)
@@ -35,6 +40,9 @@ data DiagramContext repr = DiagramContext
 instance (Semigroup' (Envelope repr) repr, Semigroup' (Trace repr) repr) => Semigroup (DiagramContext repr) where
   DiagramContext e0 t0 <> DiagramContext e1 t1 = DiagramContext (e0 %<> e1) (t0 %<> t1)
 
+instance (Monoid' (Envelope repr) repr, Monoid' (Trace repr) repr) => Monoid (DiagramContext repr) where
+  mempty = DiagramContext mempty' mempty'
+
 transformContext
   :: (AffineAction' Scalar (Envelope repr) repr, AffineAction' Scalar (Trace repr) repr)
   => repr (AffineTransform repr Scalar)
@@ -42,9 +50,15 @@ transformContext
   -> DiagramContext repr
 transformContext t (DiagramContext e tr) = DiagramContext (actA' t e) (actA' t tr)
 
+joinContext :: Monad repr => repr (DiagramContext repr) -> DiagramContext repr
+joinContext mctx = DiagramContext
+  { _diagramContext_envelope = join $ fmap _diagramContext_envelope mctx
+  , _diagramContext_trace = join $ fmap _diagramContext_trace mctx
+  }
+
 class ( Envelopes repr, Traces repr, Scales repr
-      , Semigroup' (Style repr) repr
-      , Semigroup' (Diagram repr) repr
+      , Monoid' (Style repr) repr
+      , Monoid' (Diagram repr) repr
       , AffineAction' Scalar (Style repr) repr
       , AffineAction' Scalar (Prim repr) repr
       , AffineAction' Scalar (Diagram repr) repr
@@ -58,32 +72,41 @@ class ( Envelopes repr, Traces repr, Scales repr
   delayed :: repr (Envelope repr) -> repr (Trace repr) -> repr (Scaled repr (Diagram repr)) -> repr (Diagram repr)
   ann :: repr (Ann repr) -> repr (Diagram repr) -> repr (Diagram repr)
   style :: repr (Style repr) -> repr (Diagram repr) -> repr (Diagram repr)
+  -- TODO: This isn't written in the same style as other higher order DSL functions
+  modifyContext :: (DiagramContext repr -> DiagramContext repr) -> repr (Diagram repr) -> repr (Diagram repr)
   default prim :: (Applicative repr, Diagram repr ~ DefaultDiagram repr) => repr (Envelope repr) -> repr (Trace repr) -> repr (Prim repr) -> repr (Diagram repr)
-  prim e tr p = pure $ DefaultDiagram $ \_ _ _ pr _ _ -> pr (DiagramContext e tr) p
+  prim e tr p = pure $ DefaultDiagram ($ DefaultDiaF_Prim (DiagramContext e tr) p)
   default delayed :: (Applicative repr, Diagram repr ~ DefaultDiagram repr) => repr (Envelope repr) -> repr (Trace repr) -> repr (Scaled repr (Diagram repr)) -> repr (Diagram repr)
-  delayed e tr p = pure $ DefaultDiagram $ \_ _ _ _ delayed' _ -> delayed' (DiagramContext e tr) p
+  delayed e tr p = pure $ DefaultDiagram ($ DefaultDiaF_Delayed (DiagramContext e tr) p)
   default ann :: (Functor repr, Diagram repr ~ DefaultDiagram repr) => repr (Ann repr) -> repr (Diagram repr) -> repr (Diagram repr)
-  ann x = fmap $ \(DefaultDiagram d) -> DefaultDiagram $ \t s a p delayed' l -> a x $ d t s a p delayed' l
+  ann x = fmap $ \(DefaultDiagram d) -> DefaultDiagram \cata -> cata (DefaultDiaF_Ann x (d cata))
   default style :: (Functor repr, Diagram repr ~ DefaultDiagram repr) => repr (Style repr) -> repr (Diagram repr) -> repr (Diagram repr)
-  style x = fmap $ \(DefaultDiagram d) -> DefaultDiagram $ \t s a p delayed' l -> s x $ d t s a p delayed' l
+  style x = fmap $ \(DefaultDiagram d) -> DefaultDiagram \cata -> cata (DefaultDiaF_Style x (d cata))
+  default modifyContext :: (Functor repr, Diagram repr ~ DefaultDiagram repr) => (DiagramContext repr -> DiagramContext repr) -> repr (Diagram repr) -> repr (Diagram repr)
+  modifyContext f = fmap $ \(DefaultDiagram d) -> DefaultDiagram \cata -> cata (DefaultDiaF_Context f (d cata))
 
--- | Reference implementation of non-empty diagrams
-newtype DefaultDiagram repr = DefaultDiagram
-  { unDefaultDiagram
-      :: forall r. (repr (AffineTransform repr Scalar) -> r -> r)
-      -> (repr (Style repr) -> r -> r)
-      -> (repr (Ann repr) -> r -> r)
-      -> (DiagramContext repr -> repr (Prim repr) -> r)
-      -> (DiagramContext repr -> repr (Scaled repr (Diagram repr)) -> r)
-      -> (r -> r -> r)
-      -> r
-  }
+data DefaultDiaF repr x
+   = DefaultDiaF_Transform (repr (AffineTransform repr Scalar)) x
+   | DefaultDiaF_Style (repr (Style repr)) x
+   | DefaultDiaF_Ann (repr (Ann repr)) x
+   | DefaultDiaF_Prim (DiagramContext repr) (repr (Prim repr))
+   | DefaultDiaF_Delayed (DiagramContext repr) (repr (Scaled repr (Diagram repr)))
+   | DefaultDiaF_Context (DiagramContext repr -> DiagramContext repr) x
 
-instance (Monad repr) => Semigroup (DefaultDiagram repr) where
-  DefaultDiagram d0 <> DefaultDiagram d1 = DefaultDiagram $ \t s a p d l ->
-    let r0 = d0 t s a p d l
-        r1 = d1 t s a p d l
-     in l r0 r1
+-- | We can implement diagrams as trees
+-- The F-algebra supplied should respect the monoid structure of its carrier. e.g.
+--     'cata (DefaultDiaF_Transform t (r <> s))'
+--   ~ 'cata (DefaultDiaF_Transform t r) <> cata (DefaultDiaF_Transform t s)'
+--
+-- Taking this to its conclusion means that the result of the catamorphism should be equal
+-- to the product of all catamorphisms of "paths to leaves"
+newtype DefaultDiagram repr = DefaultDiagram { unDefaultDiagram :: forall r. Monoid r => (DefaultDiaF repr r -> r) -> r }
+
+instance Semigroup (DefaultDiagram repr) where
+  DefaultDiagram d0 <> DefaultDiagram d1 = DefaultDiagram \cata -> d0 cata <> d1 cata
+
+instance Monoid (DefaultDiagram repr) where
+  mempty = DefaultDiagram \_ -> mempty
 
 instance
   ( AffineAction' Scalar (Style repr) repr
@@ -93,33 +116,60 @@ instance
   , Traces repr
   , Diagram repr ~ DefaultDiagram repr
   ) => AffineAction' Scalar (DefaultDiagram repr) repr where
-  actA' tf = fmap $ \(DefaultDiagram d) -> DefaultDiagram $ \t s a p l m -> t tf $ d t s a p l m
+  actA' tf = fmap $ \(DefaultDiagram d) -> DefaultDiagram \cata -> cata $ DefaultDiaF_Transform tf (d cata)
 
-renderDiagramM
-  :: (Monad repr, Diagrams repr, Diagram repr ~ DefaultDiagram repr)
+data DiagramFold repr x = DiagramFold
+  { _diagramFold_transform :: repr (AffineTransform repr Scalar) -> x -> x
+  , _diagramFold_style :: repr (Style repr) -> x -> x
+  , _diagramFold_ann :: repr (Ann repr) -> x -> x
+  , _diagramFold_prim :: repr (Prim repr) -> x
+  , _diagramFold_context :: (DiagramContext repr -> DiagramContext repr) -> x -> x
+  }
+
+foldContext :: Diagrams repr => DiagramFold repr (DiagramContext repr)
+foldContext = DiagramFold
+  { _diagramFold_transform = transformContext
+  , _diagramFold_style = const id
+  , _diagramFold_ann = const id
+  , _diagramFold_prim = const mempty
+  , _diagramFold_context = id
+  }
+
+foldPair :: DiagramFold repr a -> DiagramFold repr b -> DiagramFold repr (a, b)
+foldPair d1 d2 = DiagramFold
+  { _diagramFold_transform = \t -> _diagramFold_transform d1 t *** _diagramFold_transform d2 t
+  , _diagramFold_style = \s -> _diagramFold_style d1 s *** _diagramFold_style d2 s
+  , _diagramFold_ann = \a -> _diagramFold_ann d1 a *** _diagramFold_ann d2 a
+  , _diagramFold_prim = _diagramFold_prim d1 &&& _diagramFold_prim d2
+  , _diagramFold_context = \f -> _diagramFold_context d1 f *** _diagramFold_context d2 f
+  }
+
+renderDiagram
+  :: (Monad repr, Monoid r, Diagrams repr, Diagram repr ~ DefaultDiagram repr)
   => repr (Diagram repr)
+  -- ^ The representation of our diagram
   -> repr (AffineTransform repr Scalar)
-  -- ^ Transformation from global diagram coordinates to output coordinates
-  -> (repr (AffineTransform repr Scalar) -> r -> r)
-  -> (repr (Style repr) -> r -> r)
-  -> (repr (Ann repr) -> r -> r)
-  -> (repr (Prim repr) -> r)
-  -> (DiagramContext repr -> r -> r)
-  -> (r -> r -> r)
+  -- ^ The top-level transformation from diagram coordinates to output coordinates
+  -> DiagramFold repr r
+  -- ^ How to process a concrete tree with no delayed leaves
   -> (repr r -> r)
-  -> (r -> DiagramContext repr)
-  -> repr r
-renderDiagramM d' tf0 t s a p attachContext l f getCtx = flip fmap (actA' tf0 d') $ \(DefaultDiagram d) ->
-  -- Tie the knot to instantiate parts of the diagram that depend on
-  -- the global context.
-  let runPrim c x = attachContext c $ p x
-      runDelayed preCtx dl =
-        let dl' = withScaleOf dl tf0 (_diagramContext_envelope finalContext)
-         in attachContext preCtx $ f (flip fmap dl' $ \x -> unDefaultDiagram x t s a runPrim runDelayed l)
-      finalDiagram = d t s a runPrim runDelayed l
-      finalContext = getCtx finalDiagram
+  -- ^ How to incorporate the results of delayed leaves
+  -> repr (DiagramContext repr, r)
+renderDiagram d' t0 foldResult foldDelayed = flip fmap (actA' t0 d') $ \(DefaultDiagram d) ->
+  let foldWithContext = foldPair foldContext foldResult
+      cata = \case
+        DefaultDiaF_Transform tf r -> _diagramFold_transform foldWithContext tf r
+        DefaultDiaF_Style st r -> _diagramFold_style foldWithContext st r
+        DefaultDiaF_Ann an r -> _diagramFold_ann foldWithContext an r
+        DefaultDiaF_Prim ctx p -> _diagramFold_prim foldWithContext p & _1 .~ ctx
+        DefaultDiaF_Delayed ctx dl ->
+          let dl' = flip fmap (withScaleOf dl t0 (_diagramContext_envelope finalContext)) $ \(DefaultDiagram x) -> snd $ x cata
+           in (ctx, foldDelayed dl')
+        DefaultDiaF_Context f r -> _diagramFold_context foldWithContext f r
+      finalDiagram@(finalContext, _) = d cata
    in finalDiagram
 
+-- TODO: Trash?
 newtype MonadicDiagram repr prim style ann a = MonadicDiagram { unMonadicDiagram :: repr a }
   deriving (Functor, Applicative, Monad)
 

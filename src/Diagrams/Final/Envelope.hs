@@ -25,7 +25,7 @@ instance Wrapped (DefaultEnvelope repr) where
 
 instance Rewrapped (DefaultEnvelope repr) (DefaultEnvelope repr)
 
-class (Spatial repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Envelope repr) repr) => Envelopes repr where
+class (Spatial repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Envelope repr) repr, Monoid' (Envelope repr) repr) => Envelopes repr where
   type Envelope repr :: *
   type Envelope repr = DefaultEnvelope repr
   emptyEnvelope :: repr (Envelope repr)
