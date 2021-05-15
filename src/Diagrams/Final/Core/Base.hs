@@ -18,7 +18,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Diagrams.Final.Base where
+module Diagrams.Final.Core.Base where
 
 import Control.Applicative
 import Control.Lens

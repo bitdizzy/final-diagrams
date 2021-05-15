@@ -20,8 +20,8 @@
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Diagrams.Final.Space
-  ( module Diagrams.Final.Space
+module Diagrams.Final.Core.Space
+  ( module Diagrams.Final.Core.Space
   , module X
   ) where
 
@@ -32,10 +32,10 @@ import Data.Functor.Product
 import Linear hiding (basis)
 import Linear.Affine (Affine(..))
 
-import qualified Diagrams.Final.Space.Primitive as T
-import Diagrams.Final.Space.Primitive as X (Scalar)
+import qualified Diagrams.Final.Core.Space.Primitive as T
+import Diagrams.Final.Core.Space.Primitive as X (Scalar)
 
-import Diagrams.Final.Base
+import Diagrams.Final.Core.Base
 
 class Num' a repr => Conjugate' a repr where
   conjugate' :: repr a -> repr a
@@ -104,7 +104,7 @@ class (LinearAction' n (Vector repr n) repr, AffineAction' n (Point repr n) repr
 instance (LinearAction' n (Vector repr n) repr, AffineAction' n (Point repr n) repr) => SpatialClass repr n
 
 type SpatialConstraints repr =
-   ( Lambda repr, Tuple2 repr, Tuple3 repr
+   ( Tuple2 repr, Tuple3 repr
    , Integral' Int repr
    , LiftMaybe repr, LiftList repr
    , Functor' (List' repr) repr, Foldable' (List' repr) repr

@@ -10,14 +10,15 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
-module Diagrams.Final.Measure where
+module Diagrams.Final.Core.Measure where
 
 import Data.Functor.Identity
 
-import Diagrams.Final.Base
-import Diagrams.Final.Envelope
-import Diagrams.Final.Space
+import Diagrams.Final.Core.Base
+import Diagrams.Final.Core.Envelope
+import Diagrams.Final.Core.Space
 
 newtype LocalScale = LocalScale { unLocalScale :: Scalar }
 newtype GlobalScale = GlobalScale { unGlobalScale :: Scalar }
@@ -27,6 +28,8 @@ newtype DefaultScaled repr a = DefaultScaled
     { unDefaultScaled
         :: Arr repr (AffineTransform repr Scalar) (Arr repr GlobalScale (Arr repr NormalizedScale a))
     }
+
+deriving instance (Functor repr, Functor (Arr repr (AffineTransform repr Scalar)), Functor (Arr repr GlobalScale), Functor (Arr repr NormalizedScale)) => Functor (DefaultScaled repr)
 
 type Measure repr = Scaled repr Scalar
 
@@ -55,19 +58,19 @@ class (Spatial repr, forall a. AffineAction' Scalar (Scaled repr a) repr) => Sca
   fromNormalizedScale = fmap unNormalizedScale
   default toScaled :: (Functor repr, Scaled repr ~ DefaultScaled repr) => repr (Arr repr (AffineTransform repr Scalar) (Arr repr GlobalScale (Arr repr NormalizedScale a))) -> repr (Scaled repr a)
   toScaled = fmap DefaultScaled
-  default fromScaled :: (Functor repr, Scaled repr ~ DefaultScaled repr) => repr (Scaled repr a) -> repr (AffineTransform repr Scalar) -> repr GlobalScale -> repr NormalizedScale -> repr a
+  default fromScaled :: (Functor repr, Lambda repr, Scaled repr ~ DefaultScaled repr) => repr (Scaled repr a) -> repr (AffineTransform repr Scalar) -> repr GlobalScale -> repr NormalizedScale -> repr a
   fromScaled rf rt rg rn = fmap unDefaultScaled rf %$ rt %$ rg %$ rn
 
 instance Scales Identity
 
 scaled'
-  :: Scales repr
+  :: (Lambda repr, Scales repr)
   => repr (Arr repr (AffineTransform repr Scalar) (Arr repr (LocalScale) (Arr repr GlobalScale (Arr repr NormalizedScale a))))
   -> repr (Scaled repr a)
 scaled' f = toScaled $ lam $ \t -> f %$ t $% toLocalScale (averageScale (linearOf t))
 
 -- Go from (local, global, norm) -> a to Scaled a
-scaled :: Scales repr => repr (Arr repr Scalar (Arr repr Scalar (Arr repr Scalar a))) -> repr (Scaled repr a)
+scaled :: (Lambda repr, Scales repr) => repr (Arr repr Scalar (Arr repr Scalar (Arr repr Scalar a))) -> repr (Scaled repr a)
 scaled f = toScaled $ lam $ \t -> lam $ \g -> lam $ \n -> f
   %$ (averageScale (linearOf t))
   %$ fromGlobalScale g
@@ -87,5 +90,5 @@ withScaleOf f t e =
     let_ (product' @(List' repr) (fmap' (lam $ \x -> diameter x e) basis) %** (1 %/ fromIntegral' dimension)) $ \normalScale ->
       fromScaled f t (toGlobalScale avgScale) (toNormalizedScale normalScale)
 
-atLeast :: forall repr a b c d. (Spatial repr, Ord' d repr) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
+atLeast :: forall repr a b c d. (Lambda repr, Spatial repr, Ord' d repr) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
 atLeast m1 m2 = curry3' $ withLambda @repr @(a,b,c) $ liftA2' (lam $ \x -> lam $ max' x) (uncurry3' m1) (uncurry3' m2)

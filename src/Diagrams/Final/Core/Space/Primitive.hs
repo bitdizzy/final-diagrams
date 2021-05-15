@@ -9,7 +9,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-module Diagrams.Final.Space.Primitive where
+module Diagrams.Final.Core.Space.Primitive where
 
 import Control.Lens
 import Data.Constraint

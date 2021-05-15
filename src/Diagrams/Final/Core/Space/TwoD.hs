@@ -1,9 +1,9 @@
-module Diagrams.Final.Space.TwoD where
+module Diagrams.Final.Core.Space.TwoD where
 
 import Linear hiding (ex, ey)
 import qualified Linear as L
 
-import Diagrams.Final.Space.Primitive
+import Diagrams.Final.Core.Space.Primitive
 
 ex :: E Vector
 ex = L.ex

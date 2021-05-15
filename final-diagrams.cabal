@@ -17,15 +17,15 @@ cabal-version: 2.0
 library
   signatures:
   exposed-modules:
-    Diagrams.Final
-    Diagrams.Final.Base
-    Diagrams.Final.Envelope
-    Diagrams.Final.Measure
-    Diagrams.Final.Space
-    Diagrams.Final.Space.Primitive
-    Diagrams.Final.Space.TwoD
-    Diagrams.Final.Trace
-    Diagrams.Final.Type
+    Diagrams.Final.Core
+    Diagrams.Final.Core.Base
+    Diagrams.Final.Core.Envelope
+    Diagrams.Final.Core.Measure
+    Diagrams.Final.Core.Space
+    Diagrams.Final.Core.Space.Primitive
+    Diagrams.Final.Core.Space.TwoD
+    Diagrams.Final.Core.Trace
+    Diagrams.Final.Core.Type
   other-modules:
   other-extensions:
   build-depends: base >=4.11 && <5

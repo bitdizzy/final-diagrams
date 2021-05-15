@@ -10,12 +10,12 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
-module Diagrams.Final.Envelope where
+module Diagrams.Final.Core.Envelope where
 
 import Control.Lens hiding (re)
 
-import Diagrams.Final.Base
-import Diagrams.Final.Space
+import Diagrams.Final.Core.Base
+import Diagrams.Final.Core.Space
 
 newtype DefaultEnvelope repr = DefaultEnvelope { unDefaultEnvelope :: Maybe' repr (Arr repr (Vector repr Scalar) Scalar) }
 
@@ -66,14 +66,14 @@ class (Spatial repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Enve
 
 instance Envelopes Identity
 
-instance (Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => AffineAction' Scalar (DefaultEnvelope repr) repr where
+instance (Lambda repr, Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => AffineAction' Scalar (DefaultEnvelope repr) repr where
   actA' a = onEnvelope $ lam $ \f -> lam $ \v ->
     let_ (linearOf a) $ \l ->
       let_ (translationOf a) $ \t ->
         let_ (actL' (adjoint l) v) $ \v' ->
            (quadrance' v' %* (f %$ v') %+ v `dot'` t) %/ quadrance' v
 
-instance (Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => Semigroup' (DefaultEnvelope repr) repr where
+instance (Lambda repr, Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => Semigroup' (DefaultEnvelope repr) repr where
   e1 %<> e2 = withEnvelope e1 e2 $ lam $ \f1 -> withEnvelope e2 emptyEnvelope $ lam $ \f2 ->
    envelope $ lam $ \v -> max' (f1 %$ v) (f2 %$ v)
 
