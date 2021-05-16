@@ -51,6 +51,8 @@ class (Arr repr ~ arr, forall a. Applicative' (arr a) repr) => Lambda arr repr |
   default lam :: (Applicative repr, Arr repr ~ DefaultArr repr) => (repr a -> repr b) -> repr (Arr repr a b)
   lam = pure . DefaultArr
 
+type Lambda' repr = Lambda (Arr repr) repr
+
 instance Lambda (->) Identity where
   type Arr Identity = (->)
   app (Identity f) (Identity x) = Identity (f x)

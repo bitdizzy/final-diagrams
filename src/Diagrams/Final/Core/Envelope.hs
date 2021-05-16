@@ -1,7 +1,9 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -25,7 +27,7 @@ instance Wrapped (DefaultEnvelope repr) where
 
 instance Rewrapped (DefaultEnvelope repr) (DefaultEnvelope repr)
 
-class (Spatial' repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Envelope repr) repr, Monoid' (Envelope repr) repr) => Envelopes repr where
+class (Envelope repr ~ envelope, Spatial' repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Envelope repr) repr, Monoid' (Envelope repr) repr) => Envelopes envelope repr | repr -> envelope where
   type Envelope repr :: *
   type Envelope repr = DefaultEnvelope repr
   emptyEnvelope :: repr (Envelope repr)
@@ -58,33 +60,38 @@ class (Spatial' repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Env
     -> repr a
   withEnvelope e k0 k1 = maybe' k0 k1 (fmap unDefaultEnvelope e)
   default onEnvelope
-    :: (Functor repr, LiftMaybe (Maybe' repr) repr, Lambda arr repr, Envelope repr ~ DefaultEnvelope repr)
+    :: (Functor repr, LiftMaybe (Maybe' repr) repr, Lambda' repr, Envelope repr ~ DefaultEnvelope repr)
     => repr (Arr repr (Arr repr (Vector repr Scalar) Scalar) (Arr repr (Vector repr Scalar) Scalar))
     -> repr (Envelope repr)
     -> repr (Envelope repr)
   onEnvelope f = maybe' emptyEnvelope (lam (envelope . app f)) . fmap unDefaultEnvelope
 
-instance Envelopes Identity
+type Envelopes' repr = Envelopes (Envelope repr) repr
 
-instance (Lambda arr repr, Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => AffineAction' Scalar (DefaultEnvelope repr) repr where
+instance Envelopes (DefaultEnvelope Identity) Identity
+
+instance (Lambda' repr, Envelopes' repr, Envelope repr ~ DefaultEnvelope repr) => AffineAction' Scalar (DefaultEnvelope repr) repr where
   actA' a = onEnvelope $ lam $ \f -> lam $ \v ->
     let_ (linearOf a) $ \l ->
       let_ (translationOf a) $ \t ->
         let_ (actL' (adjoint l) v) $ \v' ->
            (quadrance' v' %* (f %$ v') %+ v `dot'` t) %/ quadrance' v
 
-instance (Lambda arr repr, Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => Semigroup' (DefaultEnvelope repr) repr where
+instance (Lambda' repr, Envelopes' repr, Envelope repr ~ DefaultEnvelope repr) => Semigroup' (DefaultEnvelope repr) repr where
   e1 %<> e2 = withEnvelope e1 e2 $ lam $ \f1 -> withEnvelope e2 emptyEnvelope $ lam $ \f2 ->
    envelope $ lam $ \v -> max' (f1 %$ v) (f2 %$ v)
 
-instance (Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => Monoid' (DefaultEnvelope repr) repr where
+instance (Lambda' repr, Envelopes' repr, Envelope repr ~ DefaultEnvelope repr) => Monoid' (DefaultEnvelope repr) repr where
   mempty' = emptyEnvelope
 
-class Envelopes repr => Enveloped a repr where
+class Envelopes' repr => Enveloped a repr where
   envelopeOf :: repr a -> repr (Envelope repr)
 
+instance Envelopes envelope repr => Enveloped envelope repr where
+  envelopeOf = id
+
 extent
-  :: (Envelopes repr, LiftMaybe (Maybe' repr) repr, Lambda arr repr, Tuple2 repr)
+  :: (Envelopes' repr, LiftMaybe (Maybe' repr) repr, Lambda' repr, Tuple2 repr)
   => repr (Vector repr Scalar)
   -> repr (Envelope repr)
   -> repr (Maybe' repr (Scalar, Scalar))
@@ -92,7 +99,7 @@ extent v e = withEnvelope e nothing' $ lam $ \f ->
   just' $ tup2' (negate' (f $% negated' v)) (f $% v)
 
 diameter
-  :: (Envelopes repr, LiftMaybe (Maybe' repr) repr, Lambda arr repr, Tuple2 repr)
+  :: (Envelopes' repr, LiftMaybe (Maybe' repr) repr, Lambda' repr, Tuple2 repr)
   => repr (Vector repr Scalar)
   -> repr (Envelope repr)
   -> repr Scalar

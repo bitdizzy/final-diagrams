@@ -55,7 +55,7 @@ joinContext mctx = DiagramContext
   , _diagramContext_trace = join $ fmap _diagramContext_trace mctx
   }
 
-class ( Envelopes repr, Traces repr, Scales repr
+class ( Envelopes' repr, Traces repr, Scales repr
       , Monoid' (Style repr) repr
       , AffineAction' Scalar (Style repr) repr
       , AffineAction' Scalar (Prim repr) repr
@@ -114,7 +114,7 @@ instance
   ( AffineAction' Scalar (Style repr) repr
   , AffineAction' Scalar a repr
   , Monad repr
-  , Envelopes repr
+  , Envelopes' repr
   , Traces repr
   , Diagram repr ~ DefaultDiagram repr
   ) => AffineAction' Scalar (DefaultDiagram repr a) repr where
@@ -219,6 +219,6 @@ instance (Monad repr, T.IsDiffOf T.Point T.Vector, Semigroup a) => Semigroup' (D
 
 instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Spatial (Lift1 (MonadicDiagram repr prim style ann) T.Vector) (Lift1 (MonadicDiagram repr prim style ann) T.Point) (Lift1 (MonadicDiagram repr prim style ann) T.LinearTransform) (Lift1 (MonadicDiagram repr prim style ann) T.AffineTransform) (MonadicDiagram repr prim style ann)
 
-instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Envelopes (MonadicDiagram repr prim style ann)
+instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Envelopes (DefaultEnvelope (MonadicDiagram repr prim style ann)) (MonadicDiagram repr prim style ann)
 instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Scales (MonadicDiagram repr prim style ann)
 instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Traces (MonadicDiagram repr prim style ann)
