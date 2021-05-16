@@ -1,8 +1,10 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -33,7 +35,7 @@ deriving instance (Functor repr, Functor (Arr repr (AffineTransform repr Scalar)
 
 type Measure repr = Scaled repr Scalar
 
-class (Spatial' repr, forall a. AffineAction' Scalar (Scaled repr a) repr) => Scales repr where
+class (Scaled repr ~ scaled, Spatial' repr, forall a. AffineAction' Scalar (Scaled repr a) repr) => Scales scaled repr | repr -> scaled where
   type Scaled repr :: * -> *
   type Scaled repr = DefaultScaled repr
   toLocalScale :: repr Scalar -> repr LocalScale
@@ -61,26 +63,28 @@ class (Spatial' repr, forall a. AffineAction' Scalar (Scaled repr a) repr) => Sc
   default fromScaled :: (Functor repr, Lambda' repr, Scaled repr ~ DefaultScaled repr) => repr (Scaled repr a) -> repr (AffineTransform repr Scalar) -> repr GlobalScale -> repr NormalizedScale -> repr a
   fromScaled rf rt rg rn = fmap unDefaultScaled rf %$ rt %$ rg %$ rn
 
-instance Scales Identity
+type Scales' repr = Scales (Scaled repr) repr
+
+instance Scales (DefaultScaled Identity) Identity
 
 scaled'
-  :: (Lambda' repr, Scales repr)
+  :: (Lambda' repr, Scales' repr)
   => repr (Arr repr (AffineTransform repr Scalar) (Arr repr (LocalScale) (Arr repr GlobalScale (Arr repr NormalizedScale a))))
   -> repr (Scaled repr a)
 scaled' f = toScaled $ lam $ \t -> f %$ t $% toLocalScale (averageScale (linearOf t))
 
 -- Go from (local, global, norm) -> a to Scaled a
-scaled :: (Lambda' repr, Scales repr) => repr (Arr repr Scalar (Arr repr Scalar (Arr repr Scalar a))) -> repr (Scaled repr a)
+scaled :: (Lambda' repr, Scales' repr) => repr (Arr repr Scalar (Arr repr Scalar (Arr repr Scalar a))) -> repr (Scaled repr a)
 scaled f = toScaled $ lam $ \t -> lam $ \g -> lam $ \n -> f
   %$ (averageScale (linearOf t))
   %$ fromGlobalScale g
   %$ fromNormalizedScale n
 
-instance (Lambda' repr, Scales repr, Scaled repr ~ DefaultScaled repr) => AffineAction' Scalar (DefaultScaled repr a) repr where
+instance (Lambda' repr, Scales' repr, Scaled repr ~ DefaultScaled repr) => AffineAction' Scalar (DefaultScaled repr a) repr where
   actA' t f = toScaled $ lam $ \t' -> lam $ \g -> lam $ \n -> fromScaled f (t' %<> t) g n
 
 withScaleOf
-  :: forall arr repr a. (Lambda' repr, Envelopes' repr, Scales repr, LiftMaybe (Maybe' repr) repr, Tuple2 repr)
+  :: forall arr repr a. (Lambda' repr, Envelopes' repr, Scales' repr, LiftMaybe (Maybe' repr) repr, Tuple2 repr)
   => repr (Scaled repr a)
   -> repr (AffineTransform repr Scalar)
   -> repr (Envelope repr)
