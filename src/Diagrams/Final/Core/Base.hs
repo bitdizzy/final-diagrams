@@ -41,7 +41,7 @@ instance Applicative repr => Applicative (DefaultArr repr a) where
 class Applicative' (Arr repr a) repr => LambdaClass repr a
 instance Applicative' (Arr repr a) repr => LambdaClass repr a
 
-class (forall a. LambdaClass repr a) => Lambda repr where
+class (Arr repr ~ arr, forall a. Applicative' (arr a) repr) => Lambda arr repr | repr -> arr where
   type Arr repr :: * -> * -> *
   type Arr repr = DefaultArr repr
   app :: repr (Arr repr a b) -> repr a -> repr b
@@ -51,40 +51,36 @@ class (forall a. LambdaClass repr a) => Lambda repr where
   default lam :: (Applicative repr, Arr repr ~ DefaultArr repr) => (repr a -> repr b) -> repr (Arr repr a b)
   lam = pure . DefaultArr
 
--- Work around GHC #14860
-withLambda :: forall repr a r. (Lambda repr) => ((LambdaClass repr a) => r) -> r
-withLambda f = f
-
-instance Lambda Identity where
+instance Lambda (->) Identity where
   type Arr Identity = (->)
   app (Identity f) (Identity x) = Identity (f x)
   lam = coerce
 
-let_ :: Lambda repr => repr a -> (repr a -> repr b) -> repr b
+let_ :: Lambda arr repr => repr a -> (repr a -> repr b) -> repr b
 let_ x f = lam f `app` x
 
-uncurry' :: (Tuple2 repr, Lambda repr) => repr (Arr repr a (Arr repr b c)) -> repr (Arr repr (a,b) c)
+uncurry' :: (Tuple2 repr, Lambda arr repr) => repr (Arr repr a (Arr repr b c)) -> repr (Arr repr (a,b) c)
 uncurry' f = lam $ \xy -> f %$ pi1' xy %$ pi2' xy
 
-curry' :: (Tuple2 repr, Lambda repr) => repr (Arr repr (a,b) c) -> repr (Arr repr a (Arr repr b c))
+curry' :: (Tuple2 repr, Lambda arr repr) => repr (Arr repr (a,b) c) -> repr (Arr repr a (Arr repr b c))
 curry' f = lam $ \x -> lam $ \y -> f %$ tup2' x y
 
-uncurry3' :: (Tuple3 repr, Lambda repr) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr (a,b,c) d)
+uncurry3' :: (Tuple3 repr, Lambda arr repr) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr (a,b,c) d)
 uncurry3' f = lam $ \t -> f %$ pi1' t %$ pi2' t %$ pi3' t
 
-curry3' :: (Tuple3 repr, Lambda repr) => repr (Arr repr (a,b,c) d) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
+curry3' :: (Tuple3 repr, Lambda arr repr) => repr (Arr repr (a,b,c) d) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
 curry3' f = lam $ \x -> lam $ \y -> lam $ \z -> f %$ tup3' x y z
 
 infixl 1 %$
-(%$) :: Lambda repr => repr (Arr repr a b) -> repr a -> repr b
+(%$) :: Lambda arr repr => repr (Arr repr a b) -> repr a -> repr b
 (%$) = app
 
 infixr 0 $%
-($%) :: Lambda repr => repr (Arr repr a b) -> repr a -> repr b
+($%) :: Lambda arr repr => repr (Arr repr a b) -> repr a -> repr b
 ($%) = app
 
 infixr 9 %.
-(%.) :: Lambda repr => repr (Arr repr b c) -> repr (Arr repr a b) -> repr (Arr repr a c)
+(%.) :: Lambda arr repr => repr (Arr repr b c) -> repr (Arr repr a b) -> repr (Arr repr a c)
 f %. g = lam $ \x -> f $% g $% x
 
 --
@@ -432,7 +428,7 @@ newtype Lift2 repr f a b = Lift2 { unLift2 :: f (repr a) (repr b) }
 
 class Functor' f repr where
   fmap' :: repr (Arr repr a b) -> repr (f a) -> repr (f b)
-  default fmap' :: (Lambda repr, Functor repr, f ~ Lift1 repr g, Functor g) => repr (Arr repr a b) -> repr (f a) -> repr (f b)
+  default fmap' :: (Lambda arr repr, Functor repr, f ~ Lift1 repr g, Functor g) => repr (Arr repr a b) -> repr (f a) -> repr (f b)
   fmap' rf rx = flip fmap rx $ \(Lift1 x) -> Lift1 $ fmap (rf %$) x
 
 instance {-# OVERLAPPABLE #-} Functor f => Functor' (Lift1 Identity f) Identity
@@ -440,10 +436,10 @@ instance {-# OVERLAPPABLE #-} Functor f => Functor' (Lift1 Identity f) Identity
 instance Functor' ((->) a) Identity where
   fmap' (Identity f) (Identity g) = Identity $ f . g
 
-instance (Lambda repr, Arr repr ~ DefaultArr repr) => Functor' (DefaultArr repr a) repr where
+instance (Lambda arr repr, Arr repr ~ DefaultArr repr) => Functor' (DefaultArr repr a) repr where
   fmap' = (%.)
 
-instance (Lambda repr, Tuple2 repr) => Functor' ((,) a) repr where
+instance (Lambda arr repr, Tuple2 repr) => Functor' ((,) a) repr where
   fmap' f ab = tup2' (pi1' ab) $ f %$ pi2' ab
 
 infixl 4 <%$>
@@ -455,7 +451,7 @@ class Functor' f repr => Applicative' f repr where
   ap' :: repr (f (Arr repr a b)) -> repr (f a) -> repr (f b)
   default pure' :: (f ~ Lift1 repr g, Applicative g, Applicative repr) => repr a -> repr (f a)
   pure' = pure . Lift1 . pure
-  default ap' :: (Lambda repr, Applicative repr, f ~ Lift1 repr g, Applicative g) => repr (f (Arr repr a b)) -> repr (f a) -> repr (f b)
+  default ap' :: (Lambda arr repr, Applicative repr, f ~ Lift1 repr g, Applicative g) => repr (f (Arr repr a b)) -> repr (f a) -> repr (f b)
   ap' = liftA2 $ \(Lift1 ff) (Lift1 fx) -> Lift1 $ liftA2 (%$) ff fx
 
 infixl 4 <%*>
@@ -471,7 +467,7 @@ instance Applicative' ((->) a) Identity where
   pure' = Identity . const . runIdentity
   ap' (Identity f) (Identity a) = Identity $ f <*> a
 
-instance (Lambda repr, Arr repr ~ DefaultArr repr) => Applicative' (DefaultArr repr a) repr where
+instance (Lambda arr repr, Arr repr ~ DefaultArr repr) => Applicative' (DefaultArr repr a) repr where
   pure' x = lam $ \_ -> x
   ap' f x = lam $ \a -> f %$ a %$ (x %$ a)
 
@@ -480,9 +476,9 @@ class Foldable' t repr where
   foldl'' :: repr (Arr repr b (Arr repr a b)) -> repr b -> repr (t a) -> repr b
   length' :: repr (t a) -> repr Int
   product' :: Num' a repr => repr (t a) -> repr a
-  default foldMap' :: (Monoid' m repr, Lambda repr, Monad repr, t ~ Lift1 repr g, Foldable g) => repr (Arr repr a m) -> repr (t a) -> repr m
+  default foldMap' :: (Monoid' m repr, Lambda arr repr, Monad repr, t ~ Lift1 repr g, Foldable g) => repr (Arr repr a m) -> repr (t a) -> repr m
   foldMap' rf = join . fmap (\(Lift1 g) -> unL . foldMap (L . (rf %$)) $ g)
-  default foldl'' :: (Lambda repr, Monad repr, t ~ Lift1 repr g, Foldable g) => repr (Arr repr b (Arr repr a b)) -> repr b -> repr (t a) -> repr b
+  default foldl'' :: (Lambda arr repr, Monad repr, t ~ Lift1 repr g, Foldable g) => repr (Arr repr b (Arr repr a b)) -> repr b -> repr (t a) -> repr b
   foldl'' rf a = join . fmap (\(Lift1 g) -> foldl (\x y -> rf %$ x %$ y) a g)
   default length' :: (Monad repr, t ~ Lift1 repr g, Foldable g) => repr (t a) -> repr Int
   length' = fmap (length . unLift1)
@@ -501,7 +497,7 @@ class LiftMaybe repr where
   nothing' = pure $ Lift1 Nothing
   default just' :: (Applicative repr, Maybe' repr ~ Lift1 repr Maybe) => repr a -> repr (Maybe' repr a)
   just' = pure . Lift1 . Just
-  default maybe' :: (Lambda repr, Monad repr, Maybe' repr ~ Lift1 repr Maybe) => repr a -> repr (Arr repr b a) -> repr (Maybe' repr b) -> repr a
+  default maybe' :: (Lambda arr repr, Monad repr, Maybe' repr ~ Lift1 repr Maybe) => repr a -> repr (Arr repr b a) -> repr (Maybe' repr b) -> repr a
   maybe' e0 e1 = join . fmap (\(Lift1 m) -> maybe e0 (e1 %$) m)
 
 instance LiftMaybe Identity
@@ -516,7 +512,7 @@ class LiftList repr where
   nil = pure (Lift1 [])
   default cons :: (Functor repr, List' repr ~ Lift1 repr []) => repr a -> repr (List' repr a) -> repr (List' repr a)
   cons x = fmap $ \(Lift1 xs) -> Lift1 (x:xs)
-  default foldr' :: (Lambda repr, Monad repr, List' repr ~ Lift1 repr []) => repr (List' repr a) -> repr b -> repr (Arr repr a (Arr repr b b)) -> repr b
+  default foldr' :: (Lambda arr repr, Monad repr, List' repr ~ Lift1 repr []) => repr (List' repr a) -> repr b -> repr (Arr repr a (Arr repr b b)) -> repr b
   foldr' rxs b0 bf = join $ flip fmap rxs $ \(Lift1 xs) -> foldr (\a b -> bf %$ a $% b) b0 xs
 
 instance LiftList Identity

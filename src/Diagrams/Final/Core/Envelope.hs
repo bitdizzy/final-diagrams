@@ -58,7 +58,7 @@ class (Spatial repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Enve
     -> repr a
   withEnvelope e k0 k1 = maybe' k0 k1 (fmap unDefaultEnvelope e)
   default onEnvelope
-    :: (Functor repr, LiftMaybe repr, Lambda repr, Envelope repr ~ DefaultEnvelope repr)
+    :: (Functor repr, LiftMaybe repr, Lambda arr repr, Envelope repr ~ DefaultEnvelope repr)
     => repr (Arr repr (Arr repr (Vector repr Scalar) Scalar) (Arr repr (Vector repr Scalar) Scalar))
     -> repr (Envelope repr)
     -> repr (Envelope repr)
@@ -66,22 +66,25 @@ class (Spatial repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Enve
 
 instance Envelopes Identity
 
-instance (Lambda repr, Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => AffineAction' Scalar (DefaultEnvelope repr) repr where
+instance (Lambda arr repr, Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => AffineAction' Scalar (DefaultEnvelope repr) repr where
   actA' a = onEnvelope $ lam $ \f -> lam $ \v ->
     let_ (linearOf a) $ \l ->
       let_ (translationOf a) $ \t ->
         let_ (actL' (adjoint l) v) $ \v' ->
            (quadrance' v' %* (f %$ v') %+ v `dot'` t) %/ quadrance' v
 
-instance (Lambda repr, Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => Semigroup' (DefaultEnvelope repr) repr where
+instance (Lambda arr repr, Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => Semigroup' (DefaultEnvelope repr) repr where
   e1 %<> e2 = withEnvelope e1 e2 $ lam $ \f1 -> withEnvelope e2 emptyEnvelope $ lam $ \f2 ->
    envelope $ lam $ \v -> max' (f1 %$ v) (f2 %$ v)
 
 instance (Envelopes repr, Envelope repr ~ DefaultEnvelope repr) => Monoid' (DefaultEnvelope repr) repr where
   mempty' = emptyEnvelope
 
+class Envelopes repr => Enveloped a repr where
+  envelopeOf :: repr a -> repr (Envelope repr)
+
 extent
-  :: (Envelopes repr, LiftMaybe repr, Lambda repr, Tuple2 repr)
+  :: (Envelopes repr, LiftMaybe repr, Lambda arr repr, Tuple2 repr)
   => repr (Vector repr Scalar)
   -> repr (Envelope repr)
   -> repr (Maybe' repr (Scalar, Scalar))
@@ -89,7 +92,7 @@ extent v e = withEnvelope e nothing' $ lam $ \f ->
   just' $ tup2' (negate' (f $% negated' v)) (f $% v)
 
 diameter
-  :: (Envelopes repr, LiftMaybe repr, Lambda repr, Tuple2 repr)
+  :: (Envelopes repr, LiftMaybe repr, Lambda arr repr, Tuple2 repr)
   => repr (Vector repr Scalar)
   -> repr (Envelope repr)
   -> repr Scalar

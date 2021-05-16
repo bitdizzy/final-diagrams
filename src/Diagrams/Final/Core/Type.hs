@@ -148,7 +148,7 @@ foldPair d1 d2 = DiagramFold
   }
 
 foldDiagram
-  :: (Monad repr, Lambda repr, Monoid r, Diagrams repr, Diagram repr ~ DefaultDiagram repr, AffineAction' Scalar a repr)
+  :: (Monad repr, Lambda arr repr, Monoid r, Diagrams repr, Diagram repr ~ DefaultDiagram repr, AffineAction' Scalar a repr)
   => repr (Diagram repr a)
   -- ^ The representation of our diagram
   -> repr (AffineTransform repr Scalar)
@@ -179,7 +179,7 @@ newtype MonadicDiagram repr prim style ann a = MonadicDiagram { unMonadicDiagram
 
 deriving via (Ap repr a) instance (Applicative repr, Num a) => Num (MonadicDiagram repr prim style ann a)
 
-instance Monad repr => Lambda (MonadicDiagram repr prim style ann)
+instance Monad repr => Lambda (DefaultArr (MonadicDiagram repr prim style ann)) (MonadicDiagram repr prim style ann)
 instance Monad repr => Proj1 (a, b) a (MonadicDiagram repr prim style ann)
 instance Monad repr => Proj2 (a, b) b (MonadicDiagram repr prim style ann)
 instance Monad repr => Proj1 (a, b, c) a (MonadicDiagram repr prim style ann)

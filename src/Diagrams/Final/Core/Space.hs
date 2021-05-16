@@ -240,8 +240,8 @@ instance (Num' n Identity, forall m. Num m => T.AffineAction m (f m), Functor f)
 dimension :: forall repr. Spatial repr => repr Int
 dimension = length' @(List' repr) $ basis @repr @Scalar
 
-averageScale :: (Lambda repr, Spatial repr) => repr (LinearTransform repr Scalar) -> repr Scalar
+averageScale :: (Lambda arr repr, Spatial repr) => repr (LinearTransform repr Scalar) -> repr Scalar
 averageScale t = abs' (det t) %/ fromIntegral' dimension
 
-negated' :: (Lambda repr, Functor' f repr, Num' a repr) => repr (f a) -> repr (f a)
+negated' :: (Lambda arr repr, Functor' f repr, Num' a repr) => repr (f a) -> repr (f a)
 negated' = fmap' (lam negate')

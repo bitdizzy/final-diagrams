@@ -9,6 +9,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Diagrams.Final.Core.Trace where
@@ -33,24 +34,24 @@ class (Spatial repr, Monoid' (Set' repr Scalar) repr, AffineAction' Scalar (Trac
   emptyTrace :: repr (Trace repr)
   toTrace :: repr (Arr repr (Point repr Scalar) (Arr repr (Vector repr Scalar) (Set' repr Scalar))) -> repr (Trace repr)
   fromTrace :: repr (Trace repr) -> repr (Point repr Scalar) -> repr (Vector repr Scalar) -> repr (Set' repr Scalar)
-  default emptyTrace :: (Applicative repr, Lambda repr, Trace repr ~ DefaultTrace repr) => repr (Trace repr)
+  default emptyTrace :: (Applicative repr, Lambda arr repr, Trace repr ~ DefaultTrace repr) => repr (Trace repr)
   emptyTrace = toTrace $ lam $ \_ -> lam $ \_ -> mempty' -- pure mempty
   default toTrace :: (Functor repr, Trace repr ~ DefaultTrace repr) => repr (Arr repr (Point repr Scalar) (Arr repr (Vector repr Scalar) (Set' repr Scalar))) -> repr (Trace repr)
   toTrace = fmap DefaultTrace
-  default fromTrace :: (Functor repr, Lambda repr, Trace repr ~ DefaultTrace repr) => repr (Trace repr) -> repr (Point repr Scalar) -> repr (Vector repr Scalar) -> repr (Set' repr Scalar)
+  default fromTrace :: (Functor repr, Lambda arr repr, Trace repr ~ DefaultTrace repr) => repr (Trace repr) -> repr (Point repr Scalar) -> repr (Vector repr Scalar) -> repr (Set' repr Scalar)
   fromTrace f p v = fmap unDefaultTrace f %$ p %$ v
 
 instance Semigroup' (Set Scalar) Identity
 instance Monoid' (Set Scalar) Identity
 instance Traces Identity
 
-instance (Lambda repr, Traces repr, Trace repr ~ DefaultTrace repr) => AffineAction' Scalar (DefaultTrace repr) repr where
+instance (Lambda arr repr, Traces repr, Trace repr ~ DefaultTrace repr) => AffineAction' Scalar (DefaultTrace repr) repr where
   actA' a t =
     let_ (linearOf a) $ \l ->
       toTrace $ lam $ \p -> lam $ \v ->
         fromTrace t (actA' (inverseAffine a) p) (actL' (inverseLinear l) v)
 
-instance (Lambda repr, Traces repr, Trace repr ~ DefaultTrace repr) => Semigroup' (DefaultTrace repr) repr where
+instance (Lambda arr repr, Traces repr, Trace repr ~ DefaultTrace repr) => Semigroup' (DefaultTrace repr) repr where
   t1 %<> t2 = toTrace $ lam $ \p -> lam $ \v -> fromTrace t1 p v %<> fromTrace t2 p v
 
 instance (Traces repr, Trace repr ~ DefaultTrace repr) => Monoid' (DefaultTrace repr) repr where
