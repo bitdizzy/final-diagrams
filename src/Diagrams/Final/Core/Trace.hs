@@ -1,7 +1,9 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -28,7 +30,7 @@ instance Wrapped (DefaultTrace repr) where
 
 instance Rewrapped (DefaultTrace repr) (DefaultTrace repr)
 
-class (Spatial' repr, Monoid' (Set' repr Scalar) repr, AffineAction' Scalar (Trace repr) repr, Semigroup' (Trace repr) repr, Monoid' (Trace repr) repr) => Traces repr where
+class (Trace repr ~ trace, Spatial' repr, Monoid' (Set' repr Scalar) repr, AffineAction' Scalar (Trace repr) repr, Semigroup' (Trace repr) repr, Monoid' (Trace repr) repr) => Traces trace repr | repr -> trace where
   type Trace repr :: *
   type Trace repr = DefaultTrace repr
   emptyTrace :: repr (Trace repr)
@@ -41,18 +43,20 @@ class (Spatial' repr, Monoid' (Set' repr Scalar) repr, AffineAction' Scalar (Tra
   default fromTrace :: (Functor repr, Lambda arr repr, Trace repr ~ DefaultTrace repr) => repr (Trace repr) -> repr (Point repr Scalar) -> repr (Vector repr Scalar) -> repr (Set' repr Scalar)
   fromTrace f p v = fmap unDefaultTrace f %$ p %$ v
 
+type Traces' repr = Traces (Trace repr) repr
+
 instance Semigroup' (Set Scalar) Identity
 instance Monoid' (Set Scalar) Identity
-instance Traces Identity
+instance Traces (DefaultTrace Identity) Identity
 
-instance (Lambda arr repr, Traces repr, Trace repr ~ DefaultTrace repr) => AffineAction' Scalar (DefaultTrace repr) repr where
+instance (Lambda arr repr, Traces' repr, Trace repr ~ DefaultTrace repr) => AffineAction' Scalar (DefaultTrace repr) repr where
   actA' a t =
     let_ (linearOf a) $ \l ->
       toTrace $ lam $ \p -> lam $ \v ->
         fromTrace t (actA' (inverseAffine a) p) (actL' (inverseLinear l) v)
 
-instance (Lambda arr repr, Traces repr, Trace repr ~ DefaultTrace repr) => Semigroup' (DefaultTrace repr) repr where
+instance (Lambda arr repr, Traces' repr, Trace repr ~ DefaultTrace repr) => Semigroup' (DefaultTrace repr) repr where
   t1 %<> t2 = toTrace $ lam $ \p -> lam $ \v -> fromTrace t1 p v %<> fromTrace t2 p v
 
-instance (Traces repr, Trace repr ~ DefaultTrace repr) => Monoid' (DefaultTrace repr) repr where
+instance (Lambda arr repr, Traces' repr, Trace repr ~ DefaultTrace repr) => Monoid' (DefaultTrace repr) repr where
   mempty' = emptyTrace
