@@ -85,7 +85,7 @@ class Additive' f repr => Metric' f repr where
 
 instance Metric f => Metric' (Lift1 Identity f) Identity
 
-class Additive' (Diff' p repr) repr => Affine' p repr where
+class (Diff' p repr ~ diff, Additive' (Diff' p repr) repr) => Affine' diff p repr | p repr -> diff where
   type Diff' p repr :: * -> *
   pdiff' :: Num' a repr => repr (p a) -> repr (p a) -> repr (Diff' p repr a)
   padd' :: Num' a repr => repr (p a) -> repr (Diff' p repr a) -> repr (p a)
@@ -97,30 +97,32 @@ class Additive' (Diff' p repr) repr => Affine' p repr where
   default pmin' :: (Num' a repr, p ~ Lift1 repr g, Affine g, Functor g, Diff' p repr ~ Lift1 repr (Diff g), Applicative repr) => repr (p a) -> repr (Diff' p repr a) -> repr (p a)
   pmin' = liftA2 $ \(Lift1 x) (Lift1 y) -> Lift1 $ fmap unL $ fmap L x .-^ fmap L y
 
-instance (Functor p, Affine p, Additive' (Diff' (Lift1 Identity p) Identity) Identity) => Affine' (Lift1 Identity p) Identity where
-  type Diff' (Lift1 Identity p) Identity = Lift1 Identity (Diff p)
-
-class (LinearAction' n (Vector repr n) repr, AffineAction' n (Point repr n) repr) => SpatialClass repr n
-instance (LinearAction' n (Vector repr n) repr, AffineAction' n (Point repr n) repr) => SpatialClass repr n
+instance Affine' (Lift1 Identity T.Vector) (Lift1 Identity T.Point) Identity where
+  type Diff' (Lift1 Identity T.Point) Identity = Lift1 Identity T.Vector
 
 type SpatialConstraints repr =
    ( Tuple2 repr, Tuple3 repr
    , Integral' Int repr
-   , LiftMaybe repr, LiftList repr
+   , LiftMaybe (Maybe' repr) repr, LiftList (List' repr) repr
    , Functor' (List' repr) repr, Foldable' (List' repr) repr
    , Conjugate' Scalar repr, Num' Scalar repr, Floating' Scalar repr, Fractional' Scalar repr, Eq' Scalar repr, Ord' Scalar repr
    , Functor' (Vector repr) repr, Foldable' (Vector repr) repr, Additive' (Vector repr) repr
-   , Metric' (Vector repr) repr, Affine' (Point repr) repr, Diff' (Point repr) repr ~ Vector repr
+   , Metric' (Vector repr) repr, Affine' (Vector repr) (Point repr) repr, Diff' (Point repr) repr ~ Vector repr
    , Semigroup' (LinearTransform repr Scalar) repr, Monoid' (LinearTransform repr Scalar) repr
    , Semigroup' (AffineTransform repr Scalar) repr, Monoid' (AffineTransform repr Scalar) repr
    )
 
 class
   ( SpatialConstraints repr
-  -- This should be a quantified constraint over n s.t. Num' n repr,
+  , Vector repr ~ vector
+  , Point repr ~ point
+  , LinearTransform repr ~ linear
+  , AffineTransform repr ~ affine
+  -- These should be a quantified constraint over n s.t. Num' n repr,
   -- but GHC doesn't like type families in quantified constraints
-  , SpatialClass repr Scalar
-  ) => Spatial repr where
+  , LinearAction' Scalar (vector Scalar) repr
+  , AffineAction' Scalar (point Scalar) repr
+  ) => Spatial vector point linear affine repr | repr -> vector point linear affine where
   type Vector repr :: * -> *
   type Vector repr = Lift1 repr T.Vector
   type Point repr :: * -> *
@@ -209,7 +211,9 @@ class
   affineOf = liftA2 $ \(Lift1 l) (Lift1 v) -> Lift1 $ fmap unL $ view (from T.relativeToOrigin) $
     Pair (fmap L l) (fmap L v)
 
-aff :: (Spatial repr, Num' n repr) => repr (LinearTransform repr n) -> repr (AffineTransform repr n)
+type Spatial' repr = Spatial (Vector repr) (Point repr) (LinearTransform repr) (AffineTransform repr) repr
+
+aff :: (Spatial' repr, Num' n repr) => repr (LinearTransform repr n) -> repr (AffineTransform repr n)
 aff l = affineOf l zero'
 
 instance Semigroup' (Lift1 Identity T.LinearTransform Scalar) Identity
@@ -217,7 +221,7 @@ instance Monoid' (Lift1 Identity T.LinearTransform Scalar) Identity
 instance Semigroup' (Lift1 Identity T.AffineTransform Scalar) Identity
 instance Monoid' (Lift1 Identity T.AffineTransform Scalar) Identity
 
-instance T.IsDiffOf T.Point T.Vector => Spatial Identity
+instance T.IsDiffOf T.Point T.Vector => Spatial (Lift1 Identity T.Vector) (Lift1 Identity T.Point) (Lift1 Identity T.LinearTransform) (Lift1 Identity T.AffineTransform) Identity
 
 class LinearAction' n a repr | a -> n where
   actL' :: repr (LinearTransform repr n) -> repr a -> repr a
@@ -237,10 +241,10 @@ class AffineAction' n a repr | a -> n where
 
 instance (Num' n Identity, forall m. Num m => T.AffineAction m (f m), Functor f) => AffineAction' n (Lift1 Identity f n) Identity
 
-dimension :: forall repr. Spatial repr => repr Int
-dimension = length' @(List' repr) $ basis @repr @Scalar
+dimension :: forall repr. Spatial' repr => repr Int
+dimension = length' @(List' repr) $ (basis :: repr (List' repr (Vector repr Scalar)))
 
-averageScale :: (Lambda arr repr, Spatial repr) => repr (LinearTransform repr Scalar) -> repr Scalar
+averageScale :: (Lambda arr repr, Spatial' repr) => repr (LinearTransform repr Scalar) -> repr Scalar
 averageScale t = abs' (det t) %/ fromIntegral' dimension
 
 negated' :: (Lambda arr repr, Functor' f repr, Num' a repr) => repr (f a) -> repr (f a)

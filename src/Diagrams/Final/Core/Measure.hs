@@ -33,7 +33,7 @@ deriving instance (Functor repr, Functor (Arr repr (AffineTransform repr Scalar)
 
 type Measure repr = Scaled repr Scalar
 
-class (Spatial repr, forall a. AffineAction' Scalar (Scaled repr a) repr) => Scales repr where
+class (Spatial' repr, forall a. AffineAction' Scalar (Scaled repr a) repr) => Scales repr where
   type Scaled repr :: * -> *
   type Scaled repr = DefaultScaled repr
   toLocalScale :: repr Scalar -> repr LocalScale
@@ -80,7 +80,7 @@ instance (Lambda arr repr, Scales repr, Scaled repr ~ DefaultScaled repr) => Aff
   actA' t f = toScaled $ lam $ \t' -> lam $ \g -> lam $ \n -> fromScaled f (t' %<> t) g n
 
 withScaleOf
-  :: forall arr repr a. (Lambda arr repr, Envelopes repr, Scales repr, LiftMaybe repr, Tuple2 repr)
+  :: forall arr repr a. (Lambda arr repr, Envelopes repr, Scales repr, LiftMaybe (Maybe' repr) repr, Tuple2 repr)
   => repr (Scaled repr a)
   -> repr (AffineTransform repr Scalar)
   -> repr (Envelope repr)
@@ -90,5 +90,5 @@ withScaleOf f t e =
     let_ (product' @(List' repr) (fmap' (lam $ \x -> diameter x e) basis) %** (1 %/ fromIntegral' dimension)) $ \normalScale ->
       fromScaled f t (toGlobalScale avgScale) (toNormalizedScale normalScale)
 
-atLeast :: forall arr repr a b c d. (Lambda arr repr, Spatial repr, Ord' d repr) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
+atLeast :: forall arr repr a b c d. (Lambda arr repr, Spatial' repr, Ord' d repr) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
 atLeast m1 m2 = curry3' $ liftA2' (lam $ \x -> lam $ max' x) (uncurry3' m1) (uncurry3' m2)

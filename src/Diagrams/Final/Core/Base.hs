@@ -487,7 +487,7 @@ class Foldable' t repr where
 
 instance Foldable f => Foldable' (Lift1 Identity f) Identity
 
-class LiftMaybe repr where
+class (Maybe' repr ~ maybe) => LiftMaybe maybe repr | repr -> maybe where
   type Maybe' repr :: * -> *
   type Maybe' repr = Lift1 repr Maybe
   nothing' :: repr (Maybe' repr a)
@@ -500,9 +500,9 @@ class LiftMaybe repr where
   default maybe' :: (Lambda arr repr, Monad repr, Maybe' repr ~ Lift1 repr Maybe) => repr a -> repr (Arr repr b a) -> repr (Maybe' repr b) -> repr a
   maybe' e0 e1 = join . fmap (\(Lift1 m) -> maybe e0 (e1 %$) m)
 
-instance LiftMaybe Identity
+instance LiftMaybe (Lift1 Identity Maybe) Identity
 
-class LiftList repr where
+class (List' repr ~ list) => LiftList list repr | repr -> list where
   type List' repr :: * -> *
   type List' repr = Lift1 repr []
   nil :: repr (List' repr a)
@@ -515,10 +515,10 @@ class LiftList repr where
   default foldr' :: (Lambda arr repr, Monad repr, List' repr ~ Lift1 repr []) => repr (List' repr a) -> repr b -> repr (Arr repr a (Arr repr b b)) -> repr b
   foldr' rxs b0 bf = join $ flip fmap rxs $ \(Lift1 xs) -> foldr (\a b -> bf %$ a $% b) b0 xs
 
-instance LiftList Identity
+instance LiftList (Lift1 Identity []) Identity
 
 -- TODO: This is a little bit unsatisfactory because Set can't be Lift1'd usefully
-class LiftList repr => LiftSet repr where
+class (Set' repr ~ set, LiftList (List' repr) repr) => LiftSet set repr | repr -> set where
   type Set' repr :: * -> *
   type Set' repr = Set
   fromList :: Ord' a repr => repr (List' repr a) -> repr (Set' repr a)
@@ -528,4 +528,4 @@ class LiftList repr => LiftSet repr where
   default toAscList :: (Monad repr, Ord' a repr, List' repr ~ Lift1 repr [], Set' repr ~ Set) => Ord' a repr => repr (Set' repr a) -> repr (List' repr a)
   toAscList = fmap $ Lift1 . fmap pure . Set.toAscList
 
-instance LiftSet Identity
+instance LiftSet Set Identity
