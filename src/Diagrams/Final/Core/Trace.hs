@@ -22,41 +22,37 @@ import Data.Set
 import Diagrams.Final.Core.Base
 import Diagrams.Final.Core.Space
 
-newtype DefaultTrace repr = DefaultTrace { unDefaultTrace :: Arr repr (Point repr Scalar) (Arr repr (Vector repr Scalar) (Set' repr Scalar)) }
+newtype Trace repr = Trace { unTrace :: Arr repr (Point repr Scalar) (Arr repr (Vector repr Scalar) (Set Scalar)) }
 
-instance Wrapped (DefaultTrace repr) where
-  type Unwrapped (DefaultTrace repr) = Arr repr (Point repr Scalar) (Arr repr (Vector repr Scalar) (Set' repr Scalar))
-  _Wrapped' = iso unDefaultTrace DefaultTrace
+instance Wrapped (Trace repr) where
+  type Unwrapped (Trace repr) = Arr repr (Point repr Scalar) (Arr repr (Vector repr Scalar) (Set Scalar))
+  _Wrapped' = iso unTrace Trace
 
-instance Rewrapped (DefaultTrace repr) (DefaultTrace repr)
+instance Rewrapped (Trace repr) (Trace repr)
 
-class (Trace repr ~ trace, Spatial' repr, Monoid' (Set' repr Scalar) repr, AffineAction' Scalar (Trace repr) repr, Semigroup' (Trace repr) repr, Monoid' (Trace repr) repr) => Traces trace repr | repr -> trace where
-  type Trace repr :: *
-  type Trace repr = DefaultTrace repr
+class (Spatial repr, Monoid' (Set Scalar) repr, AffineAction' Scalar (Trace repr) repr, Semigroup' (Trace repr) repr, Monoid' (Trace repr) repr) => Traces repr where
   emptyTrace :: repr (Trace repr)
-  toTrace :: repr (Arr repr (Point repr Scalar) (Arr repr (Vector repr Scalar) (Set' repr Scalar))) -> repr (Trace repr)
-  fromTrace :: repr (Trace repr) -> repr (Point repr Scalar) -> repr (Vector repr Scalar) -> repr (Set' repr Scalar)
-  default emptyTrace :: (Applicative repr, Lambda arr repr, Trace repr ~ DefaultTrace repr) => repr (Trace repr)
+  toTrace :: repr (Arr repr (Point repr Scalar) (Arr repr (Vector repr Scalar) (Set Scalar))) -> repr (Trace repr)
+  fromTrace :: repr (Trace repr) -> repr (Point repr Scalar) -> repr (Vector repr Scalar) -> repr (Set Scalar)
+  default emptyTrace :: (Applicative repr, Lambda repr) => repr (Trace repr)
   emptyTrace = toTrace $ lam $ \_ -> lam $ \_ -> mempty' -- pure mempty
-  default toTrace :: (Functor repr, Trace repr ~ DefaultTrace repr) => repr (Arr repr (Point repr Scalar) (Arr repr (Vector repr Scalar) (Set' repr Scalar))) -> repr (Trace repr)
-  toTrace = fmap DefaultTrace
-  default fromTrace :: (Functor repr, Lambda arr repr, Trace repr ~ DefaultTrace repr) => repr (Trace repr) -> repr (Point repr Scalar) -> repr (Vector repr Scalar) -> repr (Set' repr Scalar)
-  fromTrace f p v = fmap unDefaultTrace f %$ p %$ v
-
-type Traces' repr = Traces (Trace repr) repr
+  default toTrace :: (Functor repr) => repr (Arr repr (Point repr Scalar) (Arr repr (Vector repr Scalar) (Set Scalar))) -> repr (Trace repr)
+  toTrace = fmap Trace
+  default fromTrace :: (Functor repr, Lambda repr) => repr (Trace repr) -> repr (Point repr Scalar) -> repr (Vector repr Scalar) -> repr (Set Scalar)
+  fromTrace f p v = fmap unTrace f %$ p %$ v
 
 instance Semigroup' (Set Scalar) Identity
 instance Monoid' (Set Scalar) Identity
-instance Traces (DefaultTrace Identity) Identity
+instance Traces Identity
 
-instance (Lambda arr repr, Traces' repr, Trace repr ~ DefaultTrace repr) => AffineAction' Scalar (DefaultTrace repr) repr where
+instance (Lambda repr, Traces repr) => AffineAction' Scalar (Trace repr) repr where
   actA' a t =
     let_ (linearOf a) $ \l ->
       toTrace $ lam $ \p -> lam $ \v ->
         fromTrace t (actA' (inverseAffine a) p) (actL' (inverseLinear l) v)
 
-instance (Lambda arr repr, Traces' repr, Trace repr ~ DefaultTrace repr) => Semigroup' (DefaultTrace repr) repr where
+instance (Lambda repr, Traces repr) => Semigroup' (Trace repr) repr where
   t1 %<> t2 = toTrace $ lam $ \p -> lam $ \v -> fromTrace t1 p v %<> fromTrace t2 p v
 
-instance (Lambda arr repr, Traces' repr, Trace repr ~ DefaultTrace repr) => Monoid' (DefaultTrace repr) repr where
+instance (Lambda repr, Traces repr) => Monoid' (Trace repr) repr where
   mempty' = emptyTrace
