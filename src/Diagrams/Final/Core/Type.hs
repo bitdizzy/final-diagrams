@@ -203,6 +203,7 @@ instance (Metric f, Monad repr) => Metric' (T1 (MonadicDiagram repr prim style a
 instance Monad repr => Affine' (Point (MonadicDiagram repr prim style ann)) (MonadicDiagram repr prim style ann) where
 instance (forall x. Num x => T.LinearAction x (f x), Num n, Functor f, Monad repr) => LinearAction' n (T1 (MonadicDiagram repr prim style ann) f n) (MonadicDiagram repr prim style ann)
 instance (forall x. Num x => T.AffineAction x (f x), Num n, Functor f, Monad repr) => AffineAction' n (T1 (MonadicDiagram repr prim style ann) f n) (MonadicDiagram repr prim style ann)
+instance Monad repr => LiftBool (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftMaybe (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftList (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftSet (MonadicDiagram repr prim style ann)

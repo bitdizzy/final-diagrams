@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -23,7 +24,6 @@ module Diagrams.Final.Core.Base where
 import Control.Applicative
 import Control.Lens
 import Control.Monad
-import Data.Coerce
 import Data.Monoid
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -404,6 +404,19 @@ instance Integral a => Integral' a Identity
 fromIntegral' :: (Integral' a repr, Num' b repr) => repr a -> repr b
 fromIntegral' = fromInteger' . toInteger'
 
+class LiftBool repr where
+  true' :: repr Bool
+  false' :: repr Bool
+  if' :: repr Bool -> repr a -> repr a -> repr a
+  default true' :: Applicative repr => repr Bool
+  true' = pure True
+  default false' :: Applicative repr => repr Bool
+  false' = pure False
+  default if' :: Applicative repr => repr Bool -> repr a -> repr a -> repr a
+  if' = liftA3 $ \b x y -> if b then x else y
+
+instance LiftBool Identity
+
 --
 -- Higher kinds
 --
@@ -416,7 +429,7 @@ unlift1 = (join .) $ fmap $ \(T1 fa) -> sequence fa
 
 newtype T2 repr f a b = T2 { unT2 :: f (repr a) (repr b) }
 
-class Functor' f repr where
+class Lambda repr => Functor' f repr where
   fmap' :: repr (Arr repr a b) -> repr (f a) -> repr (f b)
   default fmap' :: (Lambda repr, Functor repr, f ~ T1 repr g, Functor g) => repr (Arr repr a b) -> repr (f a) -> repr (f b)
   fmap' rf rx = flip fmap rx $ \(T1 x) -> T1 $ fmap (rf %$) x
@@ -478,38 +491,44 @@ type Maybe' repr = T1 repr Maybe
 class Functor' (T1 repr Maybe) repr => LiftMaybe repr where
   nothing' :: repr (T1 repr Maybe a)
   just' :: repr a -> repr (T1 repr Maybe a)
-  maybe' :: repr a -> repr (Arr repr b a) -> repr (T1 repr Maybe b) -> repr a
+  maybe' :: repr (T1 repr Maybe b) -> repr a -> repr (Arr repr b a) -> repr a
   default nothing' :: Applicative repr => repr (T1 repr Maybe a)
   nothing' = pure $ T1 Nothing
   default just' :: Applicative repr => repr a -> repr (T1 repr Maybe a)
   just' = pure . T1 . Just
-  default maybe' :: (Lambda repr, Monad repr) => repr a -> repr (Arr repr b a) -> repr (T1 repr Maybe b) -> repr a
-  maybe' e0 e1 = join . fmap (\(T1 m) -> maybe e0 (e1 %$) m)
+  default maybe' :: (Lambda repr, Monad repr) => repr (T1 repr Maybe b) -> repr a -> repr (Arr repr b a) -> repr a
+  maybe' mx e0 e1 = join $ fmap (\(T1 m) -> maybe e0 (e1 %$) m) mx
 
 instance LiftMaybe Identity
 
 type List' repr = T1 repr []
 
 class (Functor' (T1 repr []) repr, Foldable' (T1 repr []) repr) => LiftList repr where
-  nil :: repr (T1 repr [] a)
-  cons :: repr a -> repr (T1 repr [] a) -> repr (T1 repr [] a)
+  nil' :: repr (T1 repr [] a)
+  cons' :: repr a -> repr (T1 repr [] a) -> repr (T1 repr [] a)
   foldr' :: repr (T1 repr [] a) -> repr b -> repr (Arr repr a (Arr repr b b)) -> repr b
-  default nil :: Applicative repr => repr (T1 repr [] a)
-  nil = pure (T1 [])
-  default cons :: Functor repr => repr a -> repr (T1 repr [] a) -> repr (T1 repr [] a)
-  cons x = fmap $ \(T1 xs) -> T1 (x:xs)
+  default nil' :: Applicative repr => repr (T1 repr [] a)
+  nil' = pure (T1 [])
+  default cons' :: Functor repr => repr a -> repr (T1 repr [] a) -> repr (T1 repr [] a)
+  cons' x = fmap $ \(T1 xs) -> T1 (x:xs)
   default foldr' :: (Lambda repr, Monad repr) => repr (T1 repr [] a) -> repr b -> repr (Arr repr a (Arr repr b b)) -> repr b
   foldr' rxs b0 bf = join $ flip fmap rxs $ \(T1 xs) -> foldr (\a b -> bf %$ a $% b) b0 xs
 
 instance LiftList Identity
 
+dropWhile' :: (LiftBool repr, LiftList repr) => repr (Arr repr a Bool) -> repr (List' repr a) -> repr (List' repr a)
+dropWhile' p xs = foldr' xs nil' $ lam \y -> lam \ys -> if' (p %$ y) (cons' y ys) ys
+
+last' :: (LiftMaybe repr, LiftList repr) => repr (List' repr a) -> repr (Maybe' repr a)
+last' xs = foldr' xs nothing' $ lam \y -> lam \ys -> maybe' ys (just' y) (lam just')
+
 -- TODO: This is a little bit unsatisfactory because Set can't be T1 usefully
 class LiftList repr => LiftSet repr where
-  fromList :: Ord' a repr => repr (List' repr a) -> repr (Set a)
-  toAscList :: Ord' a repr => repr (Set a) -> repr (List' repr a)
-  default fromList :: (Monad repr, Ord' a repr, List' repr ~ T1 repr []) => repr (List' repr a) -> repr (Set a)
-  fromList = (join .) . fmap $ \(T1 xs) -> fmap (Set.fromList) $ sequence xs
-  default toAscList :: (Monad repr, Ord' a repr, List' repr ~ T1 repr []) => Ord' a repr => repr (Set a) -> repr (List' repr a)
-  toAscList = fmap $ T1 . fmap pure . Set.toAscList
+  fromList' :: Ord' a repr => repr (List' repr a) -> repr (Set a)
+  toAscList' :: Ord' a repr => repr (Set a) -> repr (List' repr a)
+  default fromList' :: (Monad repr, Ord' a repr, List' repr ~ T1 repr []) => repr (List' repr a) -> repr (Set a)
+  fromList' = (join .) . fmap $ \(T1 xs) -> fmap (Set.fromList) $ sequence xs
+  default toAscList' :: (Monad repr, Ord' a repr, List' repr ~ T1 repr []) => Ord' a repr => repr (Set a) -> repr (List' repr a)
+  toAscList' = fmap $ T1 . fmap pure . Set.toAscList
 
 instance LiftSet Identity

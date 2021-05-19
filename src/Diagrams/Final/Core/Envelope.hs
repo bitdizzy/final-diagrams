@@ -56,13 +56,13 @@ class (Spatial repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Enve
     -> repr a
     -> repr (Arr repr (Arr repr (Vector repr Scalar) Scalar) a)
     -> repr a
-  withEnvelope e k0 k1 = maybe' k0 k1 (fmap unEnvelope e)
+  withEnvelope e k0 k1 = maybe' (fmap unEnvelope e) k0 k1
   default onEnvelope
     :: (Functor repr, LiftMaybe repr, Lambda repr)
     => repr (Arr repr (Arr repr (Vector repr Scalar) Scalar) (Arr repr (Vector repr Scalar) Scalar))
     -> repr (Envelope repr)
     -> repr (Envelope repr)
-  onEnvelope f = maybe' emptyEnvelope (lam (envelope . app f)) . fmap unEnvelope
+  onEnvelope f m = maybe' (fmap unEnvelope m) emptyEnvelope (lam (envelope . app f))
 
 instance Envelopes Identity
 
@@ -80,20 +80,22 @@ instance (Lambda repr, Envelopes repr) => Semigroup' (Envelope repr) repr where
 instance (Lambda repr, Envelopes repr) => Monoid' (Envelope repr) repr where
   mempty' = emptyEnvelope
 
-class Envelopes repr => Enveloped a repr where
+class Enveloped a repr where
   envelopeOf :: repr a -> repr (Envelope repr)
 
-instance Envelopes repr => Enveloped (Envelope repr) repr where
+instance Enveloped (Envelope repr) repr where
   envelopeOf = id
 
-instance (Envelopes repr, Enveloped a repr, Enveloped b repr) => Enveloped (a, b) repr where
+instance (Lambda repr, Envelopes repr, Enveloped a repr, Enveloped b repr) => Enveloped (a, b) repr where
   envelopeOf ab = envelopeOf (pi1' ab) %<> envelopeOf (pi2' ab)
 
 instance (Lambda repr, Envelopes repr, Enveloped a repr, LiftList repr) => Enveloped (List' repr a) repr where
   envelopeOf = foldMap' (lam envelopeOf)
 
 instance (Ord' a repr, Lambda repr, Envelopes repr, Enveloped a repr, LiftSet repr) => Enveloped (Set a) repr where
-  envelopeOf = envelopeOf . toAscList
+  envelopeOf = envelopeOf . toAscList'
+
+--TODO: Maps
 
 extent
   :: (Envelopes repr, LiftMaybe repr, Lambda repr, Tuple2 repr)
@@ -108,9 +110,8 @@ diameter
   => repr (Vector repr Scalar)
   -> repr (Envelope repr)
   -> repr Scalar
-diameter v e = maybe' 0
+diameter v e = maybe' (extent v e) 0
   (lam $ \tup ->
      let_ (pi1' tup) $ \lo -> let_ (pi2' tup) $ \hi ->
        hi %- lo %* norm' v
   )
-  (extent v e)

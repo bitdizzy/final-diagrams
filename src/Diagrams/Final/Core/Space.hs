@@ -84,6 +84,24 @@ class Additive' f repr => Metric' f repr where
   default signorm' :: (Floating' a repr, f ~ T1 repr g, Metric g, Applicative repr) => repr (f a) -> repr (f a)
   signorm' = fmap (\(T1 x) -> T1 $ fmap unL $ signorm (fmap L x))
 
+infixl 7 %*^
+infixl 7 %^*
+
+(%*^) :: (Num' a repr, Functor' f repr) => repr a -> repr (f a) -> repr (f a)
+(%*^) a = fmap' (lam (a %*))
+
+(%^*) :: (Num' a repr, Functor' f repr) => repr (f a) -> repr a -> repr (f a)
+(%^*) f a = fmap' (lam (%* a)) f
+
+infixl 6 %^+^
+infixl 6 %^-^
+
+(%^+^) :: (Num' a repr, Additive' f repr) => repr (f a) -> repr (f a) -> repr (f a)
+(%^+^) = vadd'
+
+(%^-^) :: (Num' a repr, Additive' f repr) => repr (f a) -> repr (f a) -> repr (f a)
+(%^-^) = vmin'
+
 instance Metric f => Metric' (T1 Identity f) Identity
 
 type family Diff' p repr :: * -> * where
@@ -101,12 +119,26 @@ class (Additive' (Diff' p repr) repr) => Affine' p repr where
   default pmin' :: (Num' a repr, p ~ T1 repr g, Affine g, Functor g, Applicative repr) => repr (p a) -> repr (Diff' p repr a) -> repr (p a)
   pmin' = liftA2 $ \(T1 x) (T1 y) -> T1 $ fmap unL $ fmap L x .-^ fmap L y
 
+infixl 6 %.-.
+infixl 6 %.+^
+infixl 6 %.-^
+
+(%.-.) :: (Affine' p repr, Num' a repr) => repr (p a) -> repr (p a) -> repr (Diff' p repr a)
+(%.-.) = pdiff'
+
+(%.+^) :: (Affine' p repr, Num' a repr) => repr (p a) -> repr (Diff' p repr a) -> repr (p a)
+(%.+^) = padd'
+
+(%.-^) :: (Affine' p repr, Num' a repr) => repr (p a) -> repr (Diff' p repr a) -> repr (p a)
+(%.-^) = pmin'
+
 instance Affine' (T1 Identity T.Point) Identity where
 
 type SpatialConstraints repr =
    ( Tuple2 repr, Tuple3 repr
    , Integral' Int repr
-   , LiftMaybe repr, LiftList repr
+   , LiftBool repr
+   , LiftMaybe repr, LiftList repr, LiftSet repr
    , Functor' (List' repr) repr, Foldable' (List' repr) repr
    , Conjugate' Scalar repr, Num' Scalar repr, Floating' Scalar repr, Fractional' Scalar repr, Eq' Scalar repr, Ord' Scalar repr
    , Functor' (Vector repr) repr, Foldable' (Vector repr) repr, Additive' (Vector repr) repr
