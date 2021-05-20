@@ -9,12 +9,15 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Diagrams.Final.Core.Space.Primitive where
 
 import Control.Lens
 import Data.Constraint
+import Data.Distributive
 import Data.Functor.Product
-import Linear hiding (ex, ey)
+import Data.Functor.Rep
+import Linear
 import qualified Linear as L
 import Linear.Affine hiding (Point, Vector)
 
@@ -26,7 +29,10 @@ basis = L.basis
 
 type Point = Homogeneous
 newtype Homogeneous a = H (V2 a)
-  deriving (Functor, Applicative, Foldable, Traversable)
+  deriving (Functor, Applicative, Foldable, Traversable, Representable)
+
+instance Distributive Homogeneous where
+  distribute f = H $ V2 (fmap (\(H (V2 x _)) -> x) f) (fmap (\(H (V2 _ y)) -> y) f)
 
 instance Affine Homogeneous where
   type Diff Homogeneous = V2

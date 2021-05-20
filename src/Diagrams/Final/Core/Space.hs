@@ -139,6 +139,9 @@ type SpatialConstraints repr =
    , Integral' Int repr
    , LiftBool repr
    , LiftMaybe repr, LiftList repr, LiftSet repr
+   , Val Scalar repr
+   , Val1 T.Vector repr, Val1 T.Point repr, Val1 T.LinearTransform repr, Val1 T.AffineTransform repr
+   , LiftRepresentable T.Vector repr, LiftRepresentable T.Point repr
    , Functor' (List' repr) repr, Foldable' (List' repr) repr
    , Conjugate' Scalar repr, Num' Scalar repr, Floating' Scalar repr, Fractional' Scalar repr, Eq' Scalar repr, Ord' Scalar repr
    , Functor' (Vector repr) repr, Foldable' (Vector repr) repr, Additive' (Vector repr) repr
@@ -237,6 +240,9 @@ class
 
 aff :: (Spatial repr, Num' n repr) => repr (LinearTransform repr n) -> repr (AffineTransform repr n)
 aff l = affineOf l zero'
+
+moveTo :: (Spatial repr, Num' n repr) => repr (Point repr n) -> repr (AffineTransform repr n)
+moveTo p = translateBy (p %.-. origin)
 
 instance Semigroup' (LinearTransform Identity Scalar) Identity
 instance Monoid' (LinearTransform Identity Scalar) Identity

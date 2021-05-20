@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DefaultSignatures #-}
@@ -16,6 +17,7 @@ module Diagrams.Final.Core.Envelope where
 
 import Control.Lens hiding (re)
 import Data.Set (Set)
+import Linear (zero, E(..))
 
 import Diagrams.Final.Core.Base
 import Diagrams.Final.Core.Space
@@ -95,7 +97,43 @@ instance (Lambda repr, Envelopes repr, Enveloped a repr, LiftList repr) => Envel
 instance (Ord' a repr, Lambda repr, Envelopes repr, Enveloped a repr, LiftSet repr) => Enveloped (Set a) repr where
   envelopeOf = envelopeOf . toAscList'
 
---TODO: Maps
+--TODO: Map instance
+
+envelopeVMay :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr (Maybe' repr (Vector repr Scalar))
+envelopeVMay v e = withEnvelope (envelopeOf e) nothing' $ lam $ \f -> just' $ (f %$ v) %*^ v
+
+envelopeV :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr (Vector repr Scalar)
+envelopeV v = (\m -> maybe' m zero' id') . envelopeVMay v
+
+envelopePMay :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr (Maybe' repr (Point repr Scalar))
+envelopePMay v = fmap' (lam $ (origin %.+^)) . envelopeVMay v
+
+envelopeSMay :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr (Maybe' repr Scalar)
+envelopeSMay v e = withEnvelope (envelopeOf e) nothing' $ lam $ \f -> just' $ (f %$ v) %* norm' v
+
+envelopeS :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr Scalar
+envelopeS v = (\m -> maybe' m 0 id') . envelopeSMay v
+
+pointEnvelope :: Envelopes repr => repr (Point repr Scalar) -> repr (Envelope repr)
+pointEnvelope p = actA' (moveTo p) (envelope $ lam \_ -> 0)
+
+diameter
+  :: Envelopes repr
+  => repr (Vector repr Scalar)
+  -> repr (Envelope repr)
+  -> repr Scalar
+diameter v e = maybe' (extent v e) 0
+  (lam $ \tup ->
+     let_ (pi1' tup) $ \lo -> let_ (pi2' tup) $ \hi ->
+       hi %- lo %* norm' v
+  )
+
+radius
+  :: Envelopes repr
+  => repr (Vector repr Scalar)
+  -> repr (Envelope repr)
+  -> repr Scalar
+radius v = (0.5 %*) . diameter v
 
 extent
   :: (Envelopes repr, LiftMaybe repr, Lambda repr, Tuple2 repr)
@@ -105,13 +143,5 @@ extent
 extent v e = withEnvelope e nothing' $ lam $ \f ->
   just' $ tup2' (negate' (f $% negated' v)) (f $% v)
 
-diameter
-  :: (Envelopes repr, LiftMaybe repr, Lambda repr, Tuple2 repr)
-  => repr (Vector repr Scalar)
-  -> repr (Envelope repr)
-  -> repr Scalar
-diameter v e = maybe' (extent v e) 0
-  (lam $ \tup ->
-     let_ (pi1' tup) $ \lo -> let_ (pi2' tup) $ \hi ->
-       hi %- lo %* norm' v
-  )
+size :: Envelopes repr => repr (Envelope repr) -> repr (Vector repr Scalar)
+size d = tabulate' $ \(E l) -> diameter (val1 (zero & l .~ 1)) d

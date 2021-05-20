@@ -22,11 +22,28 @@
 module Diagrams.Final.Core.Base where
 
 import Control.Applicative
-import Control.Lens
+import Control.Lens hiding (index)
 import Control.Monad
+import Data.Functor.Rep
 import Data.Monoid
 import Data.Set (Set)
 import qualified Data.Set as Set
+
+-- Lift values
+
+class Val a repr where
+  val :: a -> repr a
+  default val :: Applicative repr => a -> repr a
+  val = pure
+
+instance Val a Identity
+
+class Val1 f repr where
+  val1 :: f (repr a) -> repr (T1 repr f a)
+  default val1 :: Applicative repr => f (repr a) -> repr (T1 repr f a)
+  val1 = pure . T1
+
+instance Val1 f Identity
 
 --
 -- HOAS
@@ -262,7 +279,7 @@ infixl 7 %*
 
 instance Num a => Num' a Identity
 
-class Num' a repr => Fractional' a repr where
+class (Num' a repr, Fractional (repr a)) => Fractional' a repr where
   fdiv' :: repr a -> repr a -> repr a
   recip' :: repr a -> repr a
   fromRational' :: repr Rational -> repr a
@@ -532,3 +549,13 @@ class LiftList repr => LiftSet repr where
   toAscList' = fmap $ T1 . fmap pure . Set.toAscList
 
 instance LiftSet Identity
+
+class Representable f => LiftRepresentable f repr where
+  tabulate' :: (Rep f -> repr a) -> repr (T1 repr f a)
+  index' :: repr (T1 repr f a) -> repr (Rep f) -> repr a
+  default tabulate' :: Applicative repr => (Rep f -> repr a) -> repr (T1 repr f a)
+  tabulate' f = pure $ T1 $ tabulate f
+  default index' :: Monad repr => repr (T1 repr f a) -> repr (Rep f) -> repr a
+  index' fs = join . ((flip fmap fs (\(T1 xs) -> index xs)) <*>)
+
+instance Representable f => LiftRepresentable f Identity

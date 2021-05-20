@@ -17,6 +17,7 @@
 {-# LANGUAGE UndecidableSuperClasses #-}
 module Diagrams.Final.Core.Type where
 
+import Control.Applicative
 import Control.Arrow
 import Control.Monad
 import Data.Kind
@@ -177,6 +178,9 @@ newtype MonadicDiagram repr prim style ann a = MonadicDiagram { unMonadicDiagram
   deriving (Functor, Applicative, Monad)
 
 deriving via (Ap repr a) instance (Applicative repr, Num a) => Num (MonadicDiagram repr prim style ann a)
+instance (Applicative repr, Fractional a) => Fractional (MonadicDiagram repr prim style ann a) where
+  fromRational = pure . fromRational
+  (/) = liftA2 (/)
 
 instance Monad repr => Lambda (MonadicDiagram repr prim style ann)
 instance Monad repr => Proj1 (a, b) a (MonadicDiagram repr prim style ann)
@@ -216,6 +220,14 @@ instance Monad repr => Semigroup' (Set Scalar) (MonadicDiagram repr prim style a
 instance Monad repr => Monoid' (Set Scalar) (MonadicDiagram repr prim style ann)
 
 instance (Monad repr, T.IsDiffOf T.Point T.Vector, Semigroup a) => Semigroup' (DefaultDiagram (MonadicDiagram repr prim style ann) a) (MonadicDiagram repr prim style ann)
+
+instance Monad repr => Val Scalar (MonadicDiagram repr prim style ann)
+instance Monad repr => Val1 T.Vector (MonadicDiagram repr prim style ann)
+instance Monad repr => Val1 T.Point (MonadicDiagram repr prim style ann)
+instance Monad repr => Val1 T.LinearTransform (MonadicDiagram repr prim style ann)
+instance Monad repr => Val1 T.AffineTransform (MonadicDiagram repr prim style ann)
+instance Monad repr => LiftRepresentable T.Vector (MonadicDiagram repr prim style ann)
+instance Monad repr => LiftRepresentable T.Point (MonadicDiagram repr prim style ann)
 
 instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Spatial (MonadicDiagram repr prim style ann)
 
