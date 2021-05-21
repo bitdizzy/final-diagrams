@@ -145,3 +145,24 @@ extent v e = withEnvelope e nothing' $ lam $ \f ->
 
 size :: Envelopes repr => repr (Envelope repr) -> repr (Vector repr Scalar)
 size d = tabulate' $ \(E l) -> diameter (val1 (zero & l .~ 1)) d
+
+-- Juxtaposition
+
+class Juxtapose a repr where
+  juxtapose :: repr (Vector repr Scalar) -> repr a -> repr a -> repr a
+  default juxtapose :: (Envelopes repr, Enveloped a repr, AffineAction' Scalar a repr) => repr (Vector repr Scalar) -> repr a -> repr a -> repr a
+  juxtapose v a1 a2 =
+    let mv1 = lam negated' <%$> envelopeVMay v a1
+        mv2 = envelopeVMay (negated' v) a2
+     in maybe' mv1 a2 $ lam $ \v1 -> maybe' mv2 a2 $ lam $ \v2 -> actA' (translateBy (negated' (v1 %^+^ v2))) a2
+
+instance Envelopes repr => Juxtapose (Envelope repr) repr
+
+instance (Envelopes repr, Enveloped a repr, Enveloped b repr, AffineAction' Scalar a repr, AffineAction' Scalar b repr) => Juxtapose (a,b) repr
+
+instance (Envelopes repr, Enveloped a repr, AffineAction' Scalar a repr) => Juxtapose (List' repr a) repr
+
+instance (Envelopes repr, Enveloped a repr, Ord' a repr, AffineAction' Scalar a repr) => Juxtapose (Set a) repr
+
+instance (Envelopes repr, Juxtapose b repr) => Juxtapose (Arr repr a b) repr where
+  juxtapose v f1 f2 = lam $ \a -> juxtapose v (f1 %$ a) (f2 %$ a)

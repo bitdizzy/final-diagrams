@@ -29,6 +29,7 @@ import Control.Applicative
 import Control.Lens
 import Control.Monad
 import Data.Functor.Product
+import Data.Set (Set)
 import Linear hiding (basis)
 import Linear.Affine (Affine(..))
 import Data.Kind
@@ -268,6 +269,15 @@ class AffineAction' n a repr | a -> n where
   actA' = liftA2 $ \(T1 t) (T1 f) -> T1 $ fmap unL $ fmap L t `T.actA` fmap L f
 
 instance (Num' n Identity, forall m. Num m => T.AffineAction m (f m), Functor f) => AffineAction' n (T1 Identity f n) Identity
+
+instance (Tuple2 repr, AffineAction' n a repr, AffineAction' n b repr) => AffineAction' n (a, b) repr where
+  actA' f ab = tup2' (actA' f (pi1' ab)) (actA' f (pi2' ab))
+
+instance (LiftList repr, AffineAction' n a repr) => AffineAction' n (List' repr a) repr where
+  actA' f = fmap' $ lam $ actA' f
+
+instance (LiftSet repr, Ord' a repr, AffineAction' n a repr) => AffineAction' n (Set a) repr where
+  actA' f = fromList' . actA' f . toAscList'
 
 dimension :: forall repr. Spatial repr => repr Int
 dimension = length' @(List' repr) $ basis @repr @Scalar

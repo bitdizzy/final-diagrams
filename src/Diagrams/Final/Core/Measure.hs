@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -58,29 +59,29 @@ class (Spatial repr, forall a. AffineAction' Scalar (Scaled repr a) repr) => Sca
   fromNormalizedScale = fmap unNormalizedScale
   default toScaled :: (Functor repr) => repr (Arr repr (AffineTransform repr Scalar) (Arr repr GlobalScale (Arr repr NormalizedScale a))) -> repr (Scaled repr a)
   toScaled = fmap Scaled
-  default fromScaled :: (Functor repr, Lambda repr) => repr (Scaled repr a) -> repr (AffineTransform repr Scalar) -> repr GlobalScale -> repr NormalizedScale -> repr a
+  default fromScaled :: (Functor repr) => repr (Scaled repr a) -> repr (AffineTransform repr Scalar) -> repr GlobalScale -> repr NormalizedScale -> repr a
   fromScaled rf rt rg rn = fmap unScaled rf %$ rt %$ rg %$ rn
 
 instance Scales Identity
 
 scaled'
-  :: (Lambda repr, Scales repr)
+  :: (Scales repr)
   => repr (Arr repr (AffineTransform repr Scalar) (Arr repr (LocalScale) (Arr repr GlobalScale (Arr repr NormalizedScale a))))
   -> repr (Scaled repr a)
 scaled' f = toScaled $ lam $ \t -> f %$ t $% toLocalScale (averageScale (linearOf t))
 
 -- Go from (local, global, norm) -> a to Scaled a
-scaled :: (Lambda repr, Scales repr) => repr (Arr repr Scalar (Arr repr Scalar (Arr repr Scalar a))) -> repr (Scaled repr a)
+scaled :: (Scales repr) => repr (Arr repr Scalar (Arr repr Scalar (Arr repr Scalar a))) -> repr (Scaled repr a)
 scaled f = toScaled $ lam $ \t -> lam $ \g -> lam $ \n -> f
   %$ (averageScale (linearOf t))
   %$ fromGlobalScale g
   %$ fromNormalizedScale n
 
-instance (Lambda repr, Scales repr) => AffineAction' Scalar (Scaled repr a) repr where
+instance (Scales repr) => AffineAction' Scalar (Scaled repr a) repr where
   actA' t f = toScaled $ lam $ \t' -> lam $ \g -> lam $ \n -> fromScaled f (t' %<> t) g n
 
 withScaleOf
-  :: forall repr a. (Lambda repr, Envelopes repr, Scales repr, LiftMaybe repr, Tuple2 repr)
+  :: forall repr a. (Envelopes repr, Scales repr)
   => repr (Scaled repr a)
   -> repr (AffineTransform repr Scalar)
   -> repr (Envelope repr)
@@ -90,5 +91,8 @@ withScaleOf f t e =
     let_ (product' @(List' repr) (fmap' (lam $ \x -> diameter x e) basis) %** (1 %/ fromIntegral' dimension)) $ \normalScale ->
       fromScaled f t (toGlobalScale avgScale) (toNormalizedScale normalScale)
 
-atLeast :: forall repr a b c d. (Lambda repr, Spatial repr, Ord' d repr) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
+atLeast :: forall repr a b c d. (Spatial repr, Ord' d repr) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
 atLeast m1 m2 = curry3' $ liftA2' (lam $ \x -> lam $ max' x) (uncurry3' m1) (uncurry3' m2)
+
+instance (Scales repr, Juxtapose a repr) => Juxtapose (Scaled repr a) repr where
+  juxtapose v a b = toScaled $ lam \t -> lam \g -> lam \n -> juxtapose v (fromScaled a t g n) (fromScaled b t g n)
