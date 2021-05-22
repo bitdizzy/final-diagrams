@@ -108,6 +108,9 @@ envelopeV v = (\m -> maybe' m zero' id') . envelopeVMay v
 envelopePMay :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr (Maybe' repr (Point repr Scalar))
 envelopePMay v = fmap' (lam $ (origin %.+^)) . envelopeVMay v
 
+envelopeP :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr (Point repr Scalar)
+envelopeP v = (origin %.+^) . envelopeV v
+
 envelopeSMay :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr (Maybe' repr Scalar)
 envelopeSMay v e = withEnvelope (envelopeOf e) nothing' $ lam $ \f -> just' $ (f %$ v) %* norm' v
 
@@ -115,7 +118,7 @@ envelopeS :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> 
 envelopeS v = (\m -> maybe' m 0 id') . envelopeSMay v
 
 pointEnvelope :: Envelopes repr => repr (Point repr Scalar) -> repr (Envelope repr)
-pointEnvelope p = actA' (moveTo p) (envelope $ lam \_ -> 0)
+pointEnvelope p = moveTo p $ envelope $ lam \_ -> 0
 
 diameter
   :: Envelopes repr

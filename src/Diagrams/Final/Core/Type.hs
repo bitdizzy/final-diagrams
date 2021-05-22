@@ -51,17 +51,11 @@ transformContext
   -> DiagramContext repr
 transformContext t (DiagramContext e tr) = DiagramContext (actA' t e) (actA' t tr)
 
-joinContext :: Monad repr => repr (DiagramContext repr) -> DiagramContext repr
-joinContext mctx = DiagramContext
-  { _diagramContext_envelope = join $ fmap _diagramContext_envelope mctx
-  , _diagramContext_trace = join $ fmap _diagramContext_trace mctx
-  }
-
 class ( Envelopes repr, Traces repr, Scales repr
       , Monoid' style repr
       , AffineAction' Scalar style repr
       , AffineAction' Scalar prim repr
-      ) => Diagrams prim style ann repr | repr -> prim style ann where
+      ) => Diagrams style ann prim repr | repr -> style ann prim where
   prim :: repr (Envelope repr) -> repr (Trace repr) -> repr prim -> repr (Diagram repr style ann prim)
   delayed :: repr (Envelope repr) -> repr (Trace repr) -> repr (Scaled repr (Diagram repr style ann a)) -> repr (Diagram repr style ann a)
   ann :: repr ann -> repr (Diagram repr style ann a) -> repr (Diagram repr style ann a)
@@ -69,6 +63,10 @@ class ( Envelopes repr, Traces repr, Scales repr
   -- TODO: This isn't written in the same style as other higher order DSL functions
   modifyContext :: (DiagramContext repr -> DiagramContext repr) -> repr (Diagram repr style ann a) -> repr (Diagram repr style ann a)
   -- TODO: Bleh
+  joinContext :: repr (DiagramContext repr) -> DiagramContext repr
+  transformDia :: repr (AffineTransform repr Scalar) -> repr (Diagram repr style ann a) -> repr (Diagram repr style ann a)
+  envelopeDia :: repr (Diagram repr style ann prim) -> repr (Envelope repr)
+  traceDia :: repr (Diagram repr style ann prim) -> repr (Trace repr)
   default prim :: (Applicative repr) => repr (Envelope repr) -> repr (Trace repr) -> repr prim -> repr (Diagram repr style ann prim)
   prim e tr p = pure $ Diagram $ \f -> (DiagramContext e tr, f $ DiaF_Prim p)
   default delayed :: (Applicative repr) => repr (Envelope repr) -> repr (Trace repr) -> repr (Scaled repr (Diagram repr style ann a)) -> repr (Diagram repr style ann a)
@@ -85,6 +83,19 @@ class ( Envelopes repr, Traces repr, Scales repr
   modifyContext t = fmap $ \(Diagram d) -> Diagram \f ->
     let (ctx, r) = d f
      in (t ctx, r)
+  default joinContext :: Monad repr => repr (DiagramContext repr) -> DiagramContext repr
+  joinContext mctx = DiagramContext
+    { _diagramContext_envelope = join $ fmap _diagramContext_envelope mctx
+    , _diagramContext_trace = join $ fmap _diagramContext_trace mctx
+    }
+  default transformDia :: Functor repr => repr (AffineTransform repr Scalar) -> repr (Diagram repr style ann a) -> repr (Diagram repr style ann a)
+  transformDia tf = fmap $ \(Diagram d) -> Diagram \f ->
+    let (ctx, r) = d f
+     in (transformContext tf ctx, f (DiaF_Transform tf r))
+  default envelopeDia :: Monad repr => repr (Diagram repr style ann prim) -> repr (Envelope repr)
+  envelopeDia = join . fmap \(Diagram d) -> _diagramContext_envelope . fst $ d (\_ -> ())
+  default traceDia :: Monad repr => repr (Diagram repr style ann prim) -> repr (Trace repr)
+  traceDia = join . fmap \(Diagram d) -> _diagramContext_trace . fst $ d (\_ -> ())
 
 data DiaF repr x style ann a
    = DiaF_Transform (repr (AffineTransform repr Scalar)) x
@@ -95,13 +106,13 @@ data DiaF repr x style ann a
 
 deriving instance (Functor repr, Functor (Scaled repr), Functor (Diagram repr style ann)) => Functor (DiaF repr x style ann )
 
-instance Monad repr => Enveloped (Diagram repr style ann prim) repr where
-  envelopeOf = join . fmap \(Diagram d) -> _diagramContext_envelope . fst $ d (\_ -> ())
+instance Diagrams style ann prim repr => Enveloped (Diagram repr style ann prim) repr where
+  envelopeOf = envelopeDia
 
-instance Monad repr => Traced (Diagram repr style ann prim) repr where
-  traceOf = join . fmap \(Diagram d) -> _diagramContext_trace . fst $ d (\_ -> ())
+instance Diagrams style ann prim repr => Traced (Diagram repr style ann prim) repr where
+  traceOf = traceDia
 
-instance (Diagrams prim style ann repr, Monad repr) => Juxtapose (Diagram repr style ann prim) repr
+instance Diagrams style ann prim repr => Juxtapose (Diagram repr style ann prim) repr
 
 -- | We can implement diagrams as trees
 -- The F-algebra supplied should respect the monoid structure of its carrier
@@ -121,15 +132,9 @@ instance (Envelopes repr, Traces repr) => Monoid (Diagram repr style ann a) wher
   mempty = Diagram \_ -> mempty
 
 instance
-  ( AffineAction' Scalar style repr
-  , AffineAction' Scalar a repr
-  , Monad repr
-  , Envelopes repr
-  , Traces repr
+  ( Diagrams style ann prim repr
   ) => AffineAction' Scalar (Diagram repr style ann a) repr where
-  actA' tf = fmap $ \(Diagram d) -> Diagram \f ->
-    let (ctx, r) = d f
-     in (transformContext tf ctx, f (DiaF_Transform tf r))
+  actA' = transformDia
 
 data DiagramFold repr style ann a x = DiagramFold
   { _diagramFold_transform :: repr (AffineTransform repr Scalar) -> x -> x
@@ -149,7 +154,7 @@ foldPair d1 d2 = DiagramFold
   }
 
 foldDiagram
-  :: (Monad repr, Lambda repr, Monoid r, Diagrams prim style ann repr, AffineAction' Scalar a repr)
+  :: (Monad repr, Lambda repr, Monoid r, Diagrams style ann prim repr, AffineAction' Scalar a repr)
   => repr (Diagram repr style ann a)
   -- ^ The representation of our diagram
   -> repr (AffineTransform repr Scalar)
@@ -208,6 +213,9 @@ instance Monad repr => Affine' (Point (MonadicDiagram repr prim style ann)) (Mon
 instance (forall x. Num x => T.LinearAction x (f x), Num n, Functor f, Monad repr) => LinearAction' n (T1 (MonadicDiagram repr prim style ann) f n) (MonadicDiagram repr prim style ann)
 instance (forall x. Num x => T.AffineAction x (f x), Num n, Functor f, Monad repr) => AffineAction' n (T1 (MonadicDiagram repr prim style ann) f n) (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftBool (MonadicDiagram repr prim style ann)
+instance Monad repr => LiftMax (MonadicDiagram repr prim style ann)
+instance Monad repr => LiftEndo (MonadicDiagram repr prim style ann)
+instance Monad repr => LiftOrdering (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftMaybe (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftList (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftSet (MonadicDiagram repr prim style ann)

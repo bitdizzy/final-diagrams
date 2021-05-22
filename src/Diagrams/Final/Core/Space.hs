@@ -139,13 +139,13 @@ type SpatialConstraints repr =
    ( Tuple2 repr, Tuple3 repr
    , Integral' Int repr
    , LiftBool repr
-   , LiftMaybe repr, LiftList repr, LiftSet repr
+   , LiftMaybe repr, LiftList repr, LiftSet repr, LiftMax repr, LiftEndo repr
    , Val Scalar repr
    , Val1 T.Vector repr, Val1 T.Point repr, Val1 T.LinearTransform repr, Val1 T.AffineTransform repr
    , LiftRepresentable T.Vector repr, LiftRepresentable T.Point repr
    , Functor' (List' repr) repr, Foldable' (List' repr) repr
    , Conjugate' Scalar repr, Num' Scalar repr, Floating' Scalar repr, Fractional' Scalar repr, Eq' Scalar repr, Ord' Scalar repr
-   , Functor' (Vector repr) repr, Foldable' (Vector repr) repr, Additive' (Vector repr) repr
+   , Functor' (Vector repr) repr, Foldable' (Vector repr) repr, Additive' (Vector repr) repr, Additive' (Point repr) repr
    , Metric' (Vector repr) repr, Affine' (Point repr) repr, Diff' (Point repr) repr ~ Vector repr
    , Semigroup' (LinearTransform repr Scalar) repr, Monoid' (LinearTransform repr Scalar) repr
    , Semigroup' (AffineTransform repr Scalar) repr, Monoid' (AffineTransform repr Scalar) repr
@@ -242,8 +242,14 @@ class
 aff :: (Spatial repr, Num' n repr) => repr (LinearTransform repr n) -> repr (AffineTransform repr n)
 aff l = affineOf l zero'
 
-moveTo :: (Spatial repr, Num' n repr) => repr (Point repr n) -> repr (AffineTransform repr n)
-moveTo p = translateBy (p %.-. origin)
+moveTo :: (Spatial repr, Num' n repr, AffineAction' n a repr) => repr (Point repr n) -> repr a -> repr a
+moveTo p = actA' (translateBy (p %.-. origin))
+
+moveOriginTo :: (Spatial repr, Num' n repr, AffineAction' n a repr) => repr (Point repr n) -> repr a -> repr a
+moveOriginTo p = actA' (translateBy (origin %.-. p))
+
+moveOriginBy :: (Spatial repr, Num' n repr, AffineAction' n a repr) => repr (Vector repr n) -> repr a -> repr a
+moveOriginBy v = actA' (translateBy (negated' v))
 
 instance Semigroup' (LinearTransform Identity Scalar) Identity
 instance Monoid' (LinearTransform Identity Scalar) Identity

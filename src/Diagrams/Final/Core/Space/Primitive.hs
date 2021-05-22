@@ -29,7 +29,7 @@ basis = L.basis
 
 type Point = Homogeneous
 newtype Homogeneous a = H (V2 a)
-  deriving (Functor, Applicative, Foldable, Traversable, Representable)
+  deriving (Functor, Applicative, Foldable, Traversable, Representable, Additive)
 
 instance Distributive Homogeneous where
   distribute f = H $ V2 (fmap (\(H (V2 x _)) -> x) f) (fmap (\(H (V2 _ y)) -> y) f)

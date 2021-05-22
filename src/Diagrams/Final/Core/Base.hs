@@ -58,6 +58,12 @@ class (forall a. Applicative' (Arr repr a) repr) => Lambda repr where
   default lam :: Applicative repr => (repr a -> repr b) -> repr (Arr repr a b)
   lam = pure . T2
 
+app2 :: Lambda repr => repr (Arr repr a (Arr repr b c)) -> repr a -> repr b -> repr c
+app2 f x y = f %$ x %$ y
+
+lam2 :: Lambda repr => (repr a -> repr b -> repr c) -> repr (Arr repr a (Arr repr b c))
+lam2 = lam . fmap lam
+
 instance Lambda Identity where
 
 id' :: Lambda repr => repr (Arr repr a a)
@@ -152,7 +158,28 @@ infix 4 %/=
 (%/=) :: Eq' a repr => repr a -> repr a -> repr Bool
 (%/=) = neq'
 
-class (Eq' a repr, Ord a) => Ord' a repr where
+class (Eq' Ordering repr) => LiftOrdering repr where
+  ltV' :: repr Ordering
+  eqV' :: repr Ordering
+  gtV' :: repr Ordering
+  ordering' :: repr Ordering -> repr a -> repr a -> repr a -> repr a
+  default ltV' :: Applicative repr => repr Ordering
+  ltV' = pure LT
+  default eqV' :: Applicative repr => repr Ordering
+  eqV' = pure EQ
+  default gtV' :: Applicative repr => repr Ordering
+  gtV' = pure GT
+  default ordering' :: Applicative repr => repr Ordering -> repr a -> repr a -> repr a -> repr a
+  ordering' rcmp ra rb rc =
+    let f cmp a b c = case cmp of
+          LT -> a
+          EQ -> b
+          GT -> c
+     in f <$> rcmp <*> ra <*> rb <*> rc
+
+instance LiftOrdering Identity
+
+class (LiftOrdering repr, Eq' a repr, Ord a) => Ord' a repr where
   compare' :: repr a -> repr a -> repr Ordering
   lt' :: repr a -> repr a -> repr Bool
   lte' :: repr a -> repr a -> repr Bool
@@ -176,6 +203,9 @@ class (Eq' a repr, Ord a) => Ord' a repr where
   min' = liftA2 min
 
 instance Ord a => Ord' a Identity
+
+comparing' :: (Lambda repr, Ord' a repr) => repr (Arr repr b a) -> repr b -> repr b -> repr Ordering
+comparing' f a b = compare' (f %$ a) (f %$ b)
 
 infix 4 %<
 (%<) :: Ord' a repr => repr a -> repr a -> repr Bool
@@ -486,16 +516,57 @@ instance Lambda repr => Applicative' (T2 repr (->) a) repr where
 
 class Foldable' t repr where
   foldMap' :: Monoid' m repr => repr (Arr repr a m) -> repr (t a) -> repr m
-  foldl'' :: repr (Arr repr b (Arr repr a b)) -> repr b -> repr (t a) -> repr b
+  foldr' :: repr (t a) -> repr b -> repr (Arr repr a (Arr repr b b)) -> repr b
+  foldr1' :: repr (t a) -> repr (Arr repr a (Arr repr a a)) -> repr (Maybe' repr a)
+  foldl'' :: repr (t a) -> repr b -> repr (Arr repr b (Arr repr a b)) -> repr b
+  foldl1' :: repr (t a) -> repr (Arr repr a (Arr repr a a)) -> repr (Maybe' repr a)
   length' :: repr (t a) -> repr Int
   product' :: Num' a repr => repr (t a) -> repr a
-  default foldMap' :: (Monoid' m repr, Lambda repr, Monad repr, t ~ T1 repr g, Foldable g) => repr (Arr repr a m) -> repr (t a) -> repr m
+  default foldMap'
+    :: (Monoid' m repr, Lambda repr, Monad repr, t ~ T1 repr g, Foldable g)
+    => repr (Arr repr a m)
+    -> repr (t a)
+    -> repr m
   foldMap' rf = join . fmap (\(T1 g) -> unL . foldMap (L . (rf %$)) $ g)
-  default foldl'' :: (Lambda repr, Monad repr, t ~ T1 repr g, Foldable g) => repr (Arr repr b (Arr repr a b)) -> repr b -> repr (t a) -> repr b
-  foldl'' rf a = join . fmap (\(T1 g) -> foldl (\x y -> rf %$ x %$ y) a g)
-  default length' :: (Monad repr, t ~ T1 repr g, Foldable g) => repr (t a) -> repr Int
+  default foldr'
+    :: (Lambda repr, Monad repr, t ~ T1 repr g, Foldable g)
+    => repr (t a)
+    -> repr b
+    -> repr (Arr repr a (Arr repr b b))
+    -> repr b
+  foldr' rxs b0 bf = join $ flip fmap rxs $ \(T1 xs) -> foldr (app2 bf) b0 xs
+  default foldr1'
+    :: (Lambda repr, Monad repr, t ~ T1 repr g, Foldable g)
+    => repr (t a)
+    -> repr (Arr repr a (Arr repr a a))
+    -> repr (Maybe' repr a)
+  foldr1' rxs bf = flip fmap rxs $ \(T1 xs) -> case null xs of
+    True -> T1 Nothing
+    False -> T1 $ Just $ foldr1 (app2 bf) xs
+  default foldl''
+    :: (Lambda repr, Monad repr, t ~ T1 repr g, Foldable g)
+    => repr (t a)
+    -> repr b
+    -> repr (Arr repr b (Arr repr a b))
+    -> repr b
+  foldl'' t a rf = t >>= \(T1 g) -> foldl (app2 rf) a g
+  default foldl1'
+    :: (Lambda repr, Monad repr, t ~ T1 repr g, Foldable g)
+    => repr (t a)
+    -> repr (Arr repr a (Arr repr a a))
+    -> repr (Maybe' repr a)
+  foldl1' rxs bf = flip fmap rxs $ \(T1 xs) -> case null xs of
+    True -> T1 Nothing
+    False -> T1 $ Just $ foldl1 (app2 bf) xs
+  default length'
+    :: (Monad repr, t ~ T1 repr g, Foldable g)
+    => repr (t a)
+    -> repr Int
   length' = fmap (length . unT1)
-  default product' :: (Num' a repr, Monad repr, t ~ T1 repr g, Foldable g) => repr (t a) -> repr a
+  default product'
+    :: (Num' a repr, Monad repr, t ~ T1 repr g, Foldable g)
+    => repr (t a)
+    -> repr a
   product' = join . fmap (unL . getProduct . foldMap (Product . L) . unT1)
 
 mconcat' :: (Lambda repr, Monoid' m repr, Foldable' t repr) => repr (t m) -> repr m
@@ -523,13 +594,10 @@ type List' repr = T1 repr []
 class (Functor' (T1 repr []) repr, Foldable' (T1 repr []) repr) => LiftList repr where
   nil' :: repr (T1 repr [] a)
   cons' :: repr a -> repr (T1 repr [] a) -> repr (T1 repr [] a)
-  foldr' :: repr (T1 repr [] a) -> repr b -> repr (Arr repr a (Arr repr b b)) -> repr b
   default nil' :: Applicative repr => repr (T1 repr [] a)
   nil' = pure (T1 [])
   default cons' :: Functor repr => repr a -> repr (T1 repr [] a) -> repr (T1 repr [] a)
   cons' x = fmap $ \(T1 xs) -> T1 (x:xs)
-  default foldr' :: (Lambda repr, Monad repr) => repr (T1 repr [] a) -> repr b -> repr (Arr repr a (Arr repr b b)) -> repr b
-  foldr' rxs b0 bf = join $ flip fmap rxs $ \(T1 xs) -> foldr (\a b -> bf %$ a $% b) b0 xs
 
 instance LiftList Identity
 
@@ -559,3 +627,53 @@ class Representable f => LiftRepresentable f repr where
   index' fs = join . ((flip fmap fs (\(T1 xs) -> index xs)) <*>)
 
 instance Representable f => LiftRepresentable f Identity
+
+newtype Max' repr a = Max' { unMax' :: Maybe' repr a }
+
+class LiftMaybe repr => LiftMax repr where
+  fromMax' :: repr (Max' repr a) -> repr (Maybe' repr a)
+  toMax' :: repr (Maybe' repr a) -> repr (Max' repr a)
+  default fromMax' :: Functor repr => repr (Max' repr a) -> repr (Maybe' repr a)
+  fromMax' = fmap unMax'
+  default toMax' :: Functor repr => repr (Maybe' repr a) -> repr (Max' repr a)
+  toMax' = fmap Max'
+
+instance LiftMax Identity
+
+instance (LiftMax repr, Ord' a repr) => Semigroup' (Max' repr a) repr where
+  r1 %<> r2 = maybe' (fromMax' r1) r2 $ lam \m1 -> maybe' (fromMax' r2) r1 $ lam \m2 -> toMax' $ just' $
+    ordering' (compare' m1 m2) m2 m2 m1
+
+instance (LiftMax repr, Ord' a repr) => Monoid' (Max' repr a) repr where
+  mempty' = toMax' nothing'
+
+maximum' :: (Lambda repr, Foldable' t repr, Ord' a repr, LiftMax repr) => repr (t a) -> repr (Maybe' repr a)
+maximum' = fromMax' . foldMap' (lam (toMax' . just'))
+
+maximumBy' :: (Lambda repr, Foldable' t repr, LiftOrdering repr) => repr (Arr repr a (Arr repr a Ordering)) -> repr (t a) -> repr (Maybe' repr a)
+maximumBy' f t = foldl1' t $ lam2 \x y -> ordering' (app2 f x y) y y x
+
+newtype Endo' repr a = Endo' { unEndo' :: Arr repr a a }
+
+class LiftEndo repr where
+  fromEndo' :: repr (Endo' repr a) -> repr (Arr repr a a)
+  toEndo' :: repr (Arr repr a a) -> repr (Endo' repr a)
+  default fromEndo' :: Functor repr => repr (Endo' repr a) -> repr (Arr repr a a)
+  fromEndo' = fmap unEndo'
+  default toEndo' :: Functor repr => repr (Arr repr a a) -> repr (Endo' repr a)
+  toEndo' = fmap Endo'
+
+instance LiftEndo Identity
+
+instance (Lambda repr, LiftEndo repr) => Semigroup' (Endo' repr a) repr where
+  e1 %<> e2 = toEndo' $ fromEndo' e1 %. fromEndo' e2
+
+instance (Lambda repr, LiftEndo repr) => Monoid' (Endo' repr a) repr where
+  mempty' = toEndo' id'
+
+applyAll
+  :: (Lambda repr, LiftEndo repr, Functor' t repr, Foldable' t repr)
+  => repr (t (Arr repr a a))
+  -> repr a
+  -> repr a
+applyAll = app . fromEndo' . mconcat' . fmap' (lam toEndo')
