@@ -4,3 +4,4 @@ module Diagrams.Final
 
 import Diagrams.Final.Core as X
 import Diagrams.Final.Align as X
+import Diagrams.Final.Points as X

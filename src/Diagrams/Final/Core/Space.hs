@@ -87,12 +87,16 @@ class Additive' f repr => Metric' f repr where
 
 infixl 7 %*^
 infixl 7 %^*
+infixl 7 %^/
 
 (%*^) :: (Num' a repr, Functor' f repr) => repr a -> repr (f a) -> repr (f a)
 (%*^) a = fmap' (lam (a %*))
 
 (%^*) :: (Num' a repr, Functor' f repr) => repr (f a) -> repr a -> repr (f a)
 (%^*) f a = fmap' (lam (%* a)) f
+
+(%^/) :: (Fractional' a repr, Functor' f repr) => repr (f a) -> repr a -> repr (f a)
+(%^/) f a = fmap' (lam (%/ a)) f
 
 infixl 6 %^+^
 infixl 6 %^-^
@@ -238,6 +242,9 @@ class
     :: (Num' n repr, Applicative repr) => repr (LinearTransform repr n) -> repr (Vector repr n) -> repr (AffineTransform repr n)
   affineOf = liftA2 $ \(T1 l) (T1 v) -> T1 $ fmap unL $ view (from T.relativeToOrigin) $
     Pair (fmap L l) (fmap L v)
+
+relativeF :: (Spatial repr, Num' n repr) => repr (Point repr n) -> (repr (Vector repr n) -> repr (Vector repr n)) -> repr (Point repr n) -> repr (Point repr n)
+relativeF p f = (p %.+^) . f . (%.-. p)
 
 aff :: (Spatial repr, Num' n repr) => repr (LinearTransform repr n) -> repr (AffineTransform repr n)
 aff l = affineOf l zero'

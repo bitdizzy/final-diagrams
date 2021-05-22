@@ -28,6 +28,7 @@ library
     Diagrams.Final.Core.Trace
     Diagrams.Final.Core.Type
     Diagrams.Final.Align
+    Diagrams.Final.Points
   other-modules:
   other-extensions:
   build-depends: base >=4.11 && <5
