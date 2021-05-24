@@ -326,7 +326,7 @@ infixl 7 %/
 (%/) :: Fractional' a repr => repr a -> repr a -> repr a
 (%/) = fdiv'
 
-class (Fractional' a repr) => Floating' a repr where
+class (Fractional' a repr, Floating (repr a)) => Floating' a repr where
   pi' :: repr a
   exp' :: repr a -> repr a
   log' :: repr a -> repr a
@@ -395,6 +395,34 @@ class (Num' a repr, Ord' a repr) => Real' a repr where
 
 instance Real a => Real' a Identity
 
+class (Tuple2 repr, Integral' Int repr, Real' a repr, Fractional' a repr) => RealFrac' a repr where
+  properFraction' :: forall b. Integral' b repr => repr a -> repr (b, a)
+  truncate' :: forall b. Integral' b repr => repr a -> repr b
+  round' :: forall b. Integral' b repr => repr a -> repr b
+  ceiling' :: forall b. Integral' b repr => repr a -> repr b
+  floor' :: forall b. Integral' b repr => repr a -> repr b
+  default properFraction' :: forall b. (Functor repr, RealFrac a, Integral' b repr) => repr a -> repr (b, a)
+  properFraction' = fmap properFraction
+  default truncate' :: forall b. (Functor repr, RealFrac a, Integral' b repr) => repr a -> repr b
+  truncate' = fmap truncate
+  default round' :: forall b. (Functor repr, RealFrac a, Integral' b repr) => repr a -> repr b
+  round' = fmap round
+  default ceiling' :: forall b. (Functor repr, RealFrac a, Integral' b repr) => repr a -> repr b
+  ceiling' = fmap ceiling
+  default floor' :: forall b. (Functor repr, RealFrac a, Integral' b repr) => repr a -> repr b
+  floor' = fmap floor
+
+instance RealFrac a => RealFrac' a Identity
+
+divModF' :: (RealFrac' a repr, Integral' b repr) => repr a -> repr a -> repr (b, a)
+divModF' n d = properFraction' (n %/ d)
+
+divF' :: (Proj1 (a, b) a repr, RealFrac' b repr, Integral' a repr) => repr b -> repr b -> repr a
+divF' n d = pi1' $ divModF' n d
+
+modF' :: forall a repr. (Integral' Int repr, RealFrac' a repr) => repr a -> repr a -> repr a
+modF' n d = pi2' $ divModF' @a @repr @Int n d
+
 class Enum' a repr where
   succ' :: repr a -> repr a
   pred' :: repr a -> repr a
@@ -423,7 +451,7 @@ class Enum' a repr where
 
 instance Enum a => Enum' a Identity
 
-class (Real' a repr, Enum' a repr) => Integral' a repr where
+class (Real' a repr, Enum' a repr, Integral a) => Integral' a repr where
   quot' :: repr a -> repr a -> repr a
   rem' :: repr a -> repr a -> repr a
   div' :: repr a -> repr a -> repr a
