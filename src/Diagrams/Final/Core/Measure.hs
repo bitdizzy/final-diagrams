@@ -80,6 +80,9 @@ scaled f = toScaled $ lam $ \t -> lam $ \g -> lam $ \n -> f
 instance (Scales repr) => AffineAction' Scalar (Scaled repr a) repr where
   actA' t f = toScaled $ lam $ \t' -> lam $ \g -> lam $ \n -> fromScaled f (t' %<> t) g n
 
+instance (Scales repr, Juxtapose a repr) => Juxtapose (Scaled repr a) repr where
+  juxtapose v a b = toScaled $ lam \t -> lam \g -> lam \n -> juxtapose v (fromScaled a t g n) (fromScaled b t g n)
+
 withScaleOf
   :: forall repr a. (Envelopes repr, Scales repr)
   => repr (Scaled repr a)
@@ -91,8 +94,20 @@ withScaleOf f t e =
     let_ (product' @(List' repr) (fmap' (lam $ \x -> diameter x e) basis) %** (1 %/ fromIntegral' dimension)) $ \normalScale ->
       fromScaled f t (toGlobalScale avgScale) (toNormalizedScale normalScale)
 
+output :: Scales repr => repr a -> repr (Scaled repr a)
+output x = scaled $ lam3 \_ _ _ -> x
+
+local :: Scales repr => repr Scalar -> repr (Scaled repr Scalar)
+local x = scaled $ lam3 \l _ _ -> l %* x
+
+global :: Scales repr => repr Scalar -> repr (Scaled repr Scalar)
+global x = scaled $ lam3 \_ g _ -> g %* x
+
+normalized :: Scales repr => repr Scalar -> repr (Scaled repr Scalar)
+normalized x = scaled $ lam3 \_ _ n -> n %* x
+
 atLeast :: forall repr a b c d. (Spatial repr, Ord' d repr) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
 atLeast m1 m2 = curry3' $ liftA2' (lam $ \x -> lam $ max' x) (uncurry3' m1) (uncurry3' m2)
 
-instance (Scales repr, Juxtapose a repr) => Juxtapose (Scaled repr a) repr where
-  juxtapose v a b = toScaled $ lam \t -> lam \g -> lam \n -> juxtapose v (fromScaled a t g n) (fromScaled b t g n)
+atMost :: forall repr a b c d. (Spatial repr, Ord' d repr) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
+atMost m1 m2 = curry3' $ liftA2' (lam $ \x -> lam $ min' x) (uncurry3' m1) (uncurry3' m2)

@@ -61,8 +61,14 @@ class (forall a. Applicative' (Arr repr a) repr) => Lambda repr where
 app2 :: Lambda repr => repr (Arr repr a (Arr repr b c)) -> repr a -> repr b -> repr c
 app2 f x y = f %$ x %$ y
 
+app3 :: Lambda repr => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr a -> repr b -> repr c -> repr d
+app3 f x y z = f %$ x %$ y %$ z
+
 lam2 :: Lambda repr => (repr a -> repr b -> repr c) -> repr (Arr repr a (Arr repr b c))
 lam2 = lam . fmap lam
+
+lam3 :: Lambda repr => (repr a -> repr b -> repr c -> repr d) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
+lam3 = lam . fmap (lam . fmap lam)
 
 instance Lambda Identity where
 
