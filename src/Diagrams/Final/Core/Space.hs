@@ -262,6 +262,9 @@ instance (HasOrigin repr a, LiftList repr) => HasOrigin repr (List' repr a) wher
 instance (HasOrigin repr a, Ord' repr a, LiftSet repr) => HasOrigin repr (Set a) where
   moveOriginBy v = fromList' . fmap' (lam (moveOriginBy v)) . toAscList'
 
+instance (Tuple2 repr, HasOrigin repr a, HasOrigin repr b) => HasOrigin repr (a, b) where
+  moveOriginBy v xy = tup2' (moveOriginBy v (pi1' xy)) (moveOriginBy v (pi2' xy))
+
 moveTo :: (Spatial repr, HasOrigin repr a) => repr (Point repr Scalar) -> repr a -> repr a
 moveTo p = moveOriginBy (p %.-. origin)
 

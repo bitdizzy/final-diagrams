@@ -155,19 +155,19 @@ size d = tabulate' $ \(E l) -> diameter (val1 (zero & l .~ 1)) d
 
 class Juxtapose repr a where
   juxtapose :: repr (Vector repr Scalar) -> repr a -> repr a -> repr a
-  default juxtapose :: (Envelopes repr, Enveloped repr a, AffineAction' repr Scalar a) => repr (Vector repr Scalar) -> repr a -> repr a -> repr a
+  default juxtapose :: (Envelopes repr, Enveloped repr a, HasOrigin repr a) => repr (Vector repr Scalar) -> repr a -> repr a -> repr a
   juxtapose v a1 a2 =
     let mv1 = lam negated' <%$> envelopeVMay v a1
         mv2 = envelopeVMay (negated' v) a2
-     in maybe' mv1 a2 $ lam $ \v1 -> maybe' mv2 a2 $ lam $ \v2 -> actA' (translateBy (negated' (v1 %^+^ v2))) a2
+     in maybe' mv1 a2 $ lam $ \v1 -> maybe' mv2 a2 $ lam $ \v2 -> moveOriginBy (v1 %^+^ v2) a2
 
 instance Envelopes repr => Juxtapose repr (Envelope repr)
 
-instance (Envelopes repr, Enveloped repr a, Enveloped repr b, AffineAction' repr Scalar a, AffineAction' repr Scalar b) => Juxtapose repr (a,b)
+instance (Envelopes repr, Enveloped repr a, Enveloped repr b, HasOrigin repr a, HasOrigin repr b) => Juxtapose repr (a,b)
 
-instance (Envelopes repr, Enveloped repr a, AffineAction' repr Scalar a) => Juxtapose repr (List' repr a)
+instance (Envelopes repr, Enveloped repr a, HasOrigin repr a) => Juxtapose repr (List' repr a)
 
-instance (Envelopes repr, Enveloped repr a, Ord' repr a, AffineAction' repr Scalar a) => Juxtapose repr (Set a)
+instance (Envelopes repr, Enveloped repr a, Ord' repr a, HasOrigin repr a) => Juxtapose repr (Set a)
 
 instance (Envelopes repr, Juxtapose repr b) => Juxtapose repr (Arr repr a b) where
   juxtapose v f1 f2 = lam $ \a -> juxtapose v (f1 %$ a) (f2 %$ a)

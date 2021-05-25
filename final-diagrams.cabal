@@ -31,6 +31,7 @@ library
     Diagrams.Final.Align
     Diagrams.Final.Angle
     Diagrams.Final.Attributes
+    Diagrams.Final.Located
     Diagrams.Final.Points
   other-modules:
   other-extensions:
