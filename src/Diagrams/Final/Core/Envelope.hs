@@ -30,7 +30,7 @@ instance Wrapped (Envelope repr) where
 
 instance Rewrapped (Envelope repr) (Envelope repr)
 
-class (Spatial repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Envelope repr) repr, Monoid' (Envelope repr) repr) => Envelopes repr where
+class (Spatial repr, AffineAction' repr Scalar (Envelope repr), Semigroup' repr (Envelope repr), Monoid' repr (Envelope repr)) => Envelopes repr where
   emptyEnvelope :: repr (Envelope repr)
   envelope
     :: repr (Arr repr (Vector repr Scalar) Scalar)
@@ -68,53 +68,53 @@ class (Spatial repr, AffineAction' Scalar (Envelope repr) repr, Semigroup' (Enve
 
 instance Envelopes Identity
 
-instance (Lambda repr, Envelopes repr) => AffineAction' Scalar (Envelope repr) repr where
+instance (Lambda repr, Envelopes repr) => AffineAction' repr Scalar (Envelope repr) where
   actA' a = onEnvelope $ lam $ \f -> lam $ \v ->
     let_ (linearOf a) $ \l ->
       let_ (translationOf a) $ \t ->
         let_ (actL' (adjoint l) v) $ \v' ->
            (quadrance' v' %* (f %$ v') %+ v `dot'` t) %/ quadrance' v
 
-instance (Lambda repr, Envelopes repr) => Semigroup' (Envelope repr) repr where
+instance (Lambda repr, Envelopes repr) => Semigroup' repr (Envelope repr) where
   e1 %<> e2 = withEnvelope e1 e2 $ lam $ \f1 -> withEnvelope e2 emptyEnvelope $ lam $ \f2 ->
    envelope $ lam $ \v -> max' (f1 %$ v) (f2 %$ v)
 
-instance (Lambda repr, Envelopes repr) => Monoid' (Envelope repr) repr where
+instance (Lambda repr, Envelopes repr) => Monoid' repr (Envelope repr) where
   mempty' = emptyEnvelope
 
-class Enveloped a repr where
+class Enveloped repr a where
   envelopeOf :: repr a -> repr (Envelope repr)
 
-instance Enveloped (Envelope repr) repr where
+instance Enveloped repr (Envelope repr) where
   envelopeOf = id
 
-instance (Lambda repr, Envelopes repr, Enveloped a repr, Enveloped b repr) => Enveloped (a, b) repr where
+instance (Lambda repr, Envelopes repr, Enveloped repr a, Enveloped repr b) => Enveloped repr (a, b) where
   envelopeOf ab = envelopeOf (pi1' ab) %<> envelopeOf (pi2' ab)
 
-instance (Lambda repr, Envelopes repr, Enveloped a repr, LiftList repr) => Enveloped (List' repr a) repr where
+instance (Lambda repr, Envelopes repr, Enveloped repr a, LiftList repr) => Enveloped repr (List' repr a) where
   envelopeOf = foldMap' (lam envelopeOf)
 
-instance (Ord' a repr, Lambda repr, Envelopes repr, Enveloped a repr, LiftSet repr) => Enveloped (Set a) repr where
+instance (Ord' repr a, Lambda repr, Envelopes repr, Enveloped repr a, LiftSet repr) => Enveloped repr (Set a) where
   envelopeOf = envelopeOf . toAscList'
 
 --TODO: Map instance
 
-envelopeVMay :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr (Maybe' repr (Vector repr Scalar))
+envelopeVMay :: (Envelopes repr, Enveloped repr a) => repr (Vector repr Scalar) -> repr a -> repr (Maybe' repr (Vector repr Scalar))
 envelopeVMay v e = withEnvelope (envelopeOf e) nothing' $ lam $ \f -> just' $ (f %$ v) %*^ v
 
-envelopeV :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr (Vector repr Scalar)
+envelopeV :: (Envelopes repr, Enveloped repr a) => repr (Vector repr Scalar) -> repr a -> repr (Vector repr Scalar)
 envelopeV v = (\m -> maybe' m zero' id') . envelopeVMay v
 
-envelopePMay :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr (Maybe' repr (Point repr Scalar))
+envelopePMay :: (Envelopes repr, Enveloped repr a) => repr (Vector repr Scalar) -> repr a -> repr (Maybe' repr (Point repr Scalar))
 envelopePMay v = fmap' (lam $ (origin %.+^)) . envelopeVMay v
 
-envelopeP :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr (Point repr Scalar)
+envelopeP :: (Envelopes repr, Enveloped repr a) => repr (Vector repr Scalar) -> repr a -> repr (Point repr Scalar)
 envelopeP v = (origin %.+^) . envelopeV v
 
-envelopeSMay :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr (Maybe' repr Scalar)
+envelopeSMay :: (Envelopes repr, Enveloped repr a) => repr (Vector repr Scalar) -> repr a -> repr (Maybe' repr Scalar)
 envelopeSMay v e = withEnvelope (envelopeOf e) nothing' $ lam $ \f -> just' $ (f %$ v) %* norm' v
 
-envelopeS :: (Envelopes repr, Enveloped a repr) => repr (Vector repr Scalar) -> repr a -> repr Scalar
+envelopeS :: (Envelopes repr, Enveloped repr a) => repr (Vector repr Scalar) -> repr a -> repr Scalar
 envelopeS v = (\m -> maybe' m 0 id') . envelopeSMay v
 
 pointEnvelope :: Envelopes repr => repr (Point repr Scalar) -> repr (Envelope repr)
@@ -151,21 +151,21 @@ size d = tabulate' $ \(E l) -> diameter (val1 (zero & l .~ 1)) d
 
 -- Juxtaposition
 
-class Juxtapose a repr where
+class Juxtapose repr a where
   juxtapose :: repr (Vector repr Scalar) -> repr a -> repr a -> repr a
-  default juxtapose :: (Envelopes repr, Enveloped a repr, AffineAction' Scalar a repr) => repr (Vector repr Scalar) -> repr a -> repr a -> repr a
+  default juxtapose :: (Envelopes repr, Enveloped repr a, AffineAction' repr Scalar a) => repr (Vector repr Scalar) -> repr a -> repr a -> repr a
   juxtapose v a1 a2 =
     let mv1 = lam negated' <%$> envelopeVMay v a1
         mv2 = envelopeVMay (negated' v) a2
      in maybe' mv1 a2 $ lam $ \v1 -> maybe' mv2 a2 $ lam $ \v2 -> actA' (translateBy (negated' (v1 %^+^ v2))) a2
 
-instance Envelopes repr => Juxtapose (Envelope repr) repr
+instance Envelopes repr => Juxtapose repr (Envelope repr)
 
-instance (Envelopes repr, Enveloped a repr, Enveloped b repr, AffineAction' Scalar a repr, AffineAction' Scalar b repr) => Juxtapose (a,b) repr
+instance (Envelopes repr, Enveloped repr a, Enveloped repr b, AffineAction' repr Scalar a, AffineAction' repr Scalar b) => Juxtapose repr (a,b)
 
-instance (Envelopes repr, Enveloped a repr, AffineAction' Scalar a repr) => Juxtapose (List' repr a) repr
+instance (Envelopes repr, Enveloped repr a, AffineAction' repr Scalar a) => Juxtapose repr (List' repr a)
 
-instance (Envelopes repr, Enveloped a repr, Ord' a repr, AffineAction' Scalar a repr) => Juxtapose (Set a) repr
+instance (Envelopes repr, Enveloped repr a, Ord' repr a, AffineAction' repr Scalar a) => Juxtapose repr (Set a)
 
-instance (Envelopes repr, Juxtapose b repr) => Juxtapose (Arr repr a b) repr where
+instance (Envelopes repr, Juxtapose repr b) => Juxtapose repr (Arr repr a b) where
   juxtapose v f1 f2 = lam $ \a -> juxtapose v (f1 %$ a) (f2 %$ a)

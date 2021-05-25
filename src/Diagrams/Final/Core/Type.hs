@@ -38,24 +38,24 @@ data DiagramContext repr = DiagramContext
   , _diagramContext_trace :: repr (Trace repr)
   }
 
-instance (Semigroup' (Envelope repr) repr, Semigroup' (Trace repr) repr) => Semigroup (DiagramContext repr) where
+instance (Semigroup' repr (Envelope repr), Semigroup' repr (Trace repr)) => Semigroup (DiagramContext repr) where
   DiagramContext e0 t0 <> DiagramContext e1 t1 = DiagramContext (e0 %<> e1) (t0 %<> t1)
 
-instance (Monoid' (Envelope repr) repr, Monoid' (Trace repr) repr) => Monoid (DiagramContext repr) where
+instance (Monoid' repr (Envelope repr), Monoid' repr (Trace repr)) => Monoid (DiagramContext repr) where
   mempty = DiagramContext mempty' mempty'
 
 transformContext
-  :: (AffineAction' Scalar (Envelope repr) repr, AffineAction' Scalar (Trace repr) repr)
+  :: (AffineAction' repr Scalar (Envelope repr), AffineAction' repr Scalar (Trace repr))
   => repr (AffineTransform repr Scalar)
   -> DiagramContext repr
   -> DiagramContext repr
 transformContext t (DiagramContext e tr) = DiagramContext (actA' t e) (actA' t tr)
 
 class ( Envelopes repr, Traces repr, Scales repr
-      , Monoid' style repr
-      , AffineAction' Scalar style repr
-      , AffineAction' Scalar prim repr
-      ) => Diagrams style ann prim repr | repr -> style ann prim where
+      , Monoid' repr style
+      , AffineAction' repr Scalar style
+      , AffineAction' repr Scalar prim
+      ) => Diagrams repr style ann prim | repr -> style ann prim where
   prim :: repr (Envelope repr) -> repr (Trace repr) -> repr prim -> repr (Diagram repr style ann prim)
   delayed :: repr (Envelope repr) -> repr (Trace repr) -> repr (Scaled repr (Diagram repr style ann a)) -> repr (Diagram repr style ann a)
   ann :: repr ann -> repr (Diagram repr style ann a) -> repr (Diagram repr style ann a)
@@ -106,13 +106,13 @@ data DiaF repr x style ann a
 
 deriving instance (Functor repr, Functor (Scaled repr), Functor (Diagram repr style ann)) => Functor (DiaF repr x style ann )
 
-instance Diagrams style ann prim repr => Enveloped (Diagram repr style ann prim) repr where
+instance Diagrams repr style ann prim => Enveloped repr (Diagram repr style ann prim) where
   envelopeOf = envelopeDia
 
-instance Diagrams style ann prim repr => Traced (Diagram repr style ann prim) repr where
+instance Diagrams repr style ann prim => Traced repr (Diagram repr style ann prim) where
   traceOf = traceDia
 
-instance Diagrams style ann prim repr => Juxtapose (Diagram repr style ann prim) repr
+instance Diagrams repr style ann prim => Juxtapose repr (Diagram repr style ann prim)
 
 -- | We can implement diagrams as trees
 -- The F-algebra supplied should respect the monoid structure of its carrier
@@ -132,8 +132,8 @@ instance (Envelopes repr, Traces repr) => Monoid (Diagram repr style ann a) wher
   mempty = Diagram \_ -> mempty
 
 instance
-  ( Diagrams style ann prim repr
-  ) => AffineAction' Scalar (Diagram repr style ann a) repr where
+  ( Diagrams repr style ann prim
+  ) => AffineAction' repr Scalar (Diagram repr style ann a) where
   actA' = transformDia
 
 data DiagramFold repr style ann a x = DiagramFold
@@ -154,7 +154,7 @@ foldPair d1 d2 = DiagramFold
   }
 
 foldDiagram
-  :: (Monad repr, Lambda repr, Monoid r, Diagrams style ann prim repr, AffineAction' Scalar a repr)
+  :: (Monad repr, Lambda repr, Monoid r, Diagrams repr style ann prim, AffineAction' repr Scalar a)
   => repr (Diagram repr style ann a)
   -- ^ The representation of our diagram
   -> repr (AffineTransform repr Scalar)
@@ -203,31 +203,31 @@ instance (Applicative repr, Floating a) => Floating (MonadicDiagram repr prim st
   atanh = fmap atanh
 
 instance Monad repr => Lambda (MonadicDiagram repr prim style ann)
-instance Monad repr => Proj1 (a, b) a (MonadicDiagram repr prim style ann)
-instance Monad repr => Proj2 (a, b) b (MonadicDiagram repr prim style ann)
-instance Monad repr => Proj1 (a, b, c) a (MonadicDiagram repr prim style ann)
-instance Monad repr => Proj2 (a, b, c) b (MonadicDiagram repr prim style ann)
-instance Monad repr => Proj3 (a, b, c) c (MonadicDiagram repr prim style ann)
+instance Monad repr => Proj1 (MonadicDiagram repr prim style ann) (a, b) a
+instance Monad repr => Proj2 (MonadicDiagram repr prim style ann) (a, b) b
+instance Monad repr => Proj1 (MonadicDiagram repr prim style ann) (a, b, c) a
+instance Monad repr => Proj2 (MonadicDiagram repr prim style ann) (a, b, c) b
+instance Monad repr => Proj3 (MonadicDiagram repr prim style ann) (a, b, c) c
 instance Monad repr => Tuple2 (MonadicDiagram repr prim style ann)
 instance Monad repr => Tuple3 (MonadicDiagram repr prim style ann)
-instance (Eq n, Monad repr) => Eq' n (MonadicDiagram repr prim style ann)
-instance (Ord n, Monad repr) => Ord' n (MonadicDiagram repr prim style ann)
-instance (Num n, Monad repr) => Num' n (MonadicDiagram repr prim style ann)
-instance (Conjugate n, Monad repr) => Conjugate' n (MonadicDiagram repr prim style ann)
-instance (Real n, Monad repr) => Real' n (MonadicDiagram repr prim style ann)
-instance (Enum n, Monad repr) => Enum' n (MonadicDiagram repr prim style ann)
-instance (Integral n, Monad repr) => Integral' n (MonadicDiagram repr prim style ann)
-instance (Fractional n, Monad repr) => Fractional' n (MonadicDiagram repr prim style ann)
-instance (Floating n, Monad repr) => Floating' n (MonadicDiagram repr prim style ann)
-instance (RealFrac n, Monad repr) => RealFrac' n (MonadicDiagram repr prim style ann)
-instance (Functor f, Monad repr) => Functor' (T1 (MonadicDiagram repr prim style ann) f) (MonadicDiagram repr prim style ann)
-instance (Applicative f, Monad repr) => Applicative' (T1 (MonadicDiagram repr prim style ann) f) (MonadicDiagram repr prim style ann)
-instance (Foldable f, Monad repr) => Foldable' (T1 (MonadicDiagram repr prim style ann) f) (MonadicDiagram repr prim style ann)
-instance (Additive f, Monad repr) => Additive' (T1 (MonadicDiagram repr prim style ann) f) (MonadicDiagram repr prim style ann)
-instance (Metric f, Monad repr) => Metric' (T1 (MonadicDiagram repr prim style ann) f) (MonadicDiagram repr prim style ann)
-instance Monad repr => Affine' (Point (MonadicDiagram repr prim style ann)) (MonadicDiagram repr prim style ann) where
-instance (forall x. Num x => T.LinearAction x (f x), Num n, Functor f, Monad repr) => LinearAction' n (T1 (MonadicDiagram repr prim style ann) f n) (MonadicDiagram repr prim style ann)
-instance (forall x. Num x => T.AffineAction x (f x), Num n, Functor f, Monad repr) => AffineAction' n (T1 (MonadicDiagram repr prim style ann) f n) (MonadicDiagram repr prim style ann)
+instance (Eq n, Monad repr) => Eq' (MonadicDiagram repr prim style ann) n
+instance (Ord n, Monad repr) => Ord' (MonadicDiagram repr prim style ann) n
+instance (Num n, Monad repr) => Num' (MonadicDiagram repr prim style ann) n
+instance (Conjugate n, Monad repr) => Conjugate' (MonadicDiagram repr prim style ann) n
+instance (Real n, Monad repr) => Real' (MonadicDiagram repr prim style ann) n
+instance (Enum n, Monad repr) => Enum' (MonadicDiagram repr prim style ann) n
+instance (Integral n, Monad repr) => Integral' (MonadicDiagram repr prim style ann) n
+instance (Fractional n, Monad repr) => Fractional' (MonadicDiagram repr prim style ann) n
+instance (Floating n, Monad repr) => Floating' (MonadicDiagram repr prim style ann) n
+instance (RealFrac n, Monad repr) => RealFrac' (MonadicDiagram repr prim style ann) n
+instance (Functor f, Monad repr) => Functor' (MonadicDiagram repr prim style ann) (T1 (MonadicDiagram repr prim style ann) f)
+instance (Applicative f, Monad repr) => Applicative' (MonadicDiagram repr prim style ann) (T1 (MonadicDiagram repr prim style ann) f)
+instance (Foldable f, Monad repr) => Foldable' (MonadicDiagram repr prim style ann) (T1 (MonadicDiagram repr prim style ann) f)
+instance (Additive f, Monad repr) => Additive' (MonadicDiagram repr prim style ann) (T1 (MonadicDiagram repr prim style ann) f)
+instance (Metric f, Monad repr) => Metric' (MonadicDiagram repr prim style ann) (T1 (MonadicDiagram repr prim style ann) f)
+instance Monad repr => Affine' (MonadicDiagram repr prim style ann) (Point (MonadicDiagram repr prim style ann))
+instance (forall x. Num x => T.LinearAction x (f x), Num n, Functor f, Monad repr) => LinearAction' (MonadicDiagram repr prim style ann) n (T1 (MonadicDiagram repr prim style ann) f n)
+instance (forall x. Num x => T.AffineAction x (f x), Num n, Functor f, Monad repr) => AffineAction' (MonadicDiagram repr prim style ann) n (T1 (MonadicDiagram repr prim style ann) f n)
 instance Monad repr => LiftBool (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftMax (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftEndo (MonadicDiagram repr prim style ann)
@@ -236,22 +236,22 @@ instance Monad repr => LiftMaybe (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftList (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftSet (MonadicDiagram repr prim style ann)
 
-instance Monad repr => Semigroup' (LinearTransform (MonadicDiagram repr prim style ann) Scalar) (MonadicDiagram repr prim style ann)
-instance Monad repr => Monoid' (LinearTransform (MonadicDiagram repr prim style ann) Scalar) (MonadicDiagram repr prim style ann)
-instance Monad repr => Semigroup' (AffineTransform (MonadicDiagram repr prim style ann) Scalar) (MonadicDiagram repr prim style ann)
-instance Monad repr => Monoid' (AffineTransform (MonadicDiagram repr prim style ann) Scalar) (MonadicDiagram repr prim style ann)
-instance Monad repr => Semigroup' (Set Scalar) (MonadicDiagram repr prim style ann)
-instance Monad repr => Monoid' (Set Scalar) (MonadicDiagram repr prim style ann)
+instance Monad repr => Semigroup' (MonadicDiagram repr prim style ann) (LinearTransform (MonadicDiagram repr prim style ann) Scalar)
+instance Monad repr => Monoid' (MonadicDiagram repr prim style ann) (LinearTransform (MonadicDiagram repr prim style ann) Scalar)
+instance Monad repr => Semigroup' (MonadicDiagram repr prim style ann) (AffineTransform (MonadicDiagram repr prim style ann) Scalar)
+instance Monad repr => Monoid' (MonadicDiagram repr prim style ann) (AffineTransform (MonadicDiagram repr prim style ann) Scalar)
+instance Monad repr => Semigroup' (MonadicDiagram repr prim style ann) (Set Scalar)
+instance Monad repr => Monoid' (MonadicDiagram repr prim style ann) (Set Scalar)
 
-instance (Monad repr, T.IsDiffOf T.Point T.Vector, Semigroup a) => Semigroup' (Diagram (MonadicDiagram repr prim style ann) style ann a) (MonadicDiagram repr prim style ann)
+instance (Monad repr, T.IsDiffOf T.Point T.Vector, Semigroup a) => Semigroup' (MonadicDiagram repr prim style ann) (Diagram (MonadicDiagram repr prim style ann) style ann a)
 
-instance Monad repr => Val Scalar (MonadicDiagram repr prim style ann)
-instance Monad repr => Val1 T.Vector (MonadicDiagram repr prim style ann)
-instance Monad repr => Val1 T.Point (MonadicDiagram repr prim style ann)
-instance Monad repr => Val1 T.LinearTransform (MonadicDiagram repr prim style ann)
-instance Monad repr => Val1 T.AffineTransform (MonadicDiagram repr prim style ann)
-instance Monad repr => LiftRepresentable T.Vector (MonadicDiagram repr prim style ann)
-instance Monad repr => LiftRepresentable T.Point (MonadicDiagram repr prim style ann)
+instance Monad repr => Val (MonadicDiagram repr prim style ann) Scalar
+instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.Vector
+instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.Point
+instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.LinearTransform
+instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.AffineTransform
+instance Monad repr => LiftRepresentable (MonadicDiagram repr prim style ann) T.Vector
+instance Monad repr => LiftRepresentable (MonadicDiagram repr prim style ann) T.Point
 
 instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Spatial (MonadicDiagram repr prim style ann)
 

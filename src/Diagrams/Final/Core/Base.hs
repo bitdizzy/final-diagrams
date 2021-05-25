@@ -31,26 +31,27 @@ import qualified Data.Set as Set
 
 -- Lift values
 
-class Val a repr where
+class Val repr a where
   val :: a -> repr a
   default val :: Applicative repr => a -> repr a
   val = pure
 
-instance Val a Identity
+instance Val Identity a
 
-class Val1 f repr where
+-- TODO: Let this work with tycons that aren't lifted by T1
+class Val1 repr f where
   val1 :: f (repr a) -> repr (T1 repr f a)
   default val1 :: Applicative repr => f (repr a) -> repr (T1 repr f a)
   val1 = pure . T1
 
-instance Val1 f Identity
+instance Val1 Identity f
 
 --
 -- HOAS
 --
 type Arr repr = T2 repr (->)
 
-class (forall a. Applicative' (Arr repr a) repr) => Lambda repr where
+class (forall a. Applicative' repr (Arr repr a)) => Lambda repr where
   app :: repr (Arr repr a b) -> repr a -> repr b
   lam :: (repr a -> repr b) -> repr (Arr repr a b)
   default app :: Monad repr => repr (Arr repr a b) -> repr a -> repr b
@@ -105,37 +106,37 @@ f %. g = lam $ \x -> f $% g $% x
 --
 -- Tuples
 --
-class Proj1 x y repr | x -> y where
+class Proj1 repr x y | x -> y where
   pi1' :: repr x -> repr y
   default pi1' :: (Field1 x x y y, Functor repr) => repr x -> repr y
   pi1' = fmap (view _1)
 
-instance Proj1 (a, b) a Identity
-instance Proj1 (a, b, c) a Identity
+instance Proj1 Identity (a, b) a
+instance Proj1 Identity (a, b, c) a
 
-class Proj2 x y repr | x -> y where
+class Proj2 repr x y | x -> y where
   pi2' :: repr x -> repr y
   default pi2' :: (Field2 x x y y, Functor repr) => repr x -> repr y
   pi2' = fmap (view _2)
 
-instance Proj2 (a, b) b Identity
-instance Proj2 (a, b, c) b Identity
+instance Proj2 Identity (a, b) b
+instance Proj2 Identity (a, b, c) b
 
-class Proj3 x y repr | x -> y where
+class Proj3 repr x y | x -> y where
   pi3' :: repr x -> repr y
   default pi3' :: (Field3 x x y y, Functor repr) => repr x -> repr y
   pi3' = fmap (view _3)
 
-instance Proj3 (a, b, c) c Identity
+instance Proj3 Identity (a, b, c) c
 
-class (forall a b. Proj1 (a, b) a repr, forall a b. Proj2 (a, b) b repr) => Tuple2 repr where
+class (forall a b. Proj1 repr (a, b) a, forall a b. Proj2 repr (a, b) b) => Tuple2 repr where
   tup2' :: repr a -> repr b -> repr (a, b)
   default tup2' :: Applicative repr => repr a -> repr b -> repr (a, b)
   tup2' = liftA2 (,)
 
 instance Tuple2 Identity
 
-class (forall a b c. Proj1 (a, b, c) a repr, forall a b c. Proj2 (a, b, c) b repr, forall a b c. Proj3 (a, b, c) c repr) => Tuple3 repr where
+class (forall a b c. Proj1 repr (a, b, c) a, forall a b c. Proj2 repr (a, b, c) b, forall a b c. Proj3 repr (a, b, c) c) => Tuple3 repr where
   tup3' :: repr a -> repr b -> repr c -> repr (a, b, c)
   default tup3' :: Applicative repr => repr a -> repr b -> repr c -> repr (a, b, c)
   tup3' = liftA3 (,,)
@@ -146,7 +147,7 @@ instance Tuple3 Identity
 -- Prelude
 --
 
-class Eq a => Eq' a repr where
+class Eq a => Eq' repr a where
   eq' :: repr a -> repr a -> repr Bool
   neq' :: repr a -> repr a -> repr Bool
   default eq' :: Applicative repr => repr a -> repr a -> repr Bool
@@ -154,17 +155,17 @@ class Eq a => Eq' a repr where
   default neq' :: Applicative repr => repr a -> repr a -> repr Bool
   neq' = liftA2 (/=)
 
-instance Eq a => Eq' a Identity
+instance Eq a => Eq' Identity a
 
 infix 4 %==
-(%==) :: Eq' a repr => repr a -> repr a -> repr Bool
+(%==) :: Eq' repr a => repr a -> repr a -> repr Bool
 (%==) = eq'
 
 infix 4 %/=
-(%/=) :: Eq' a repr => repr a -> repr a -> repr Bool
+(%/=) :: Eq' repr a => repr a -> repr a -> repr Bool
 (%/=) = neq'
 
-class (Eq' Ordering repr) => LiftOrdering repr where
+class (Eq' repr Ordering) => LiftOrdering repr where
   ltV' :: repr Ordering
   eqV' :: repr Ordering
   gtV' :: repr Ordering
@@ -185,7 +186,7 @@ class (Eq' Ordering repr) => LiftOrdering repr where
 
 instance LiftOrdering Identity
 
-class (LiftOrdering repr, Eq' a repr, Ord a) => Ord' a repr where
+class (LiftOrdering repr, Eq' repr a, Ord a) => Ord' repr a where
   compare' :: repr a -> repr a -> repr Ordering
   lt' :: repr a -> repr a -> repr Bool
   lte' :: repr a -> repr a -> repr Bool
@@ -208,38 +209,38 @@ class (LiftOrdering repr, Eq' a repr, Ord a) => Ord' a repr where
   default min' :: Applicative repr => repr a -> repr a -> repr a
   min' = liftA2 min
 
-instance Ord a => Ord' a Identity
+instance Ord a => Ord' Identity a
 
-comparing' :: (Lambda repr, Ord' a repr) => repr (Arr repr b a) -> repr b -> repr b -> repr Ordering
+comparing' :: (Lambda repr, Ord' repr a) => repr (Arr repr b a) -> repr b -> repr b -> repr Ordering
 comparing' f a b = compare' (f %$ a) (f %$ b)
 
 infix 4 %<
-(%<) :: Ord' a repr => repr a -> repr a -> repr Bool
+(%<) :: Ord' repr a => repr a -> repr a -> repr Bool
 (%<) = lt'
 
 infix 4 %<=
-(%<=) :: Ord' a repr => repr a -> repr a -> repr Bool
+(%<=) :: Ord' repr a => repr a -> repr a -> repr Bool
 (%<=) = lte'
 
 infix 4 %>
-(%>) :: Ord' a repr => repr a -> repr a -> repr Bool
+(%>) :: Ord' repr a => repr a -> repr a -> repr Bool
 (%>) = gt'
 
 infix 4 %>=
-(%>=) :: Ord' a repr => repr a -> repr a -> repr Bool
+(%>=) :: Ord' repr a => repr a -> repr a -> repr Bool
 (%>=) = gte'
 
 infixr 6 %<>
 
 newtype L repr a = L { unL :: repr a }
 
-instance Semigroup' a repr => Semigroup (L repr a) where
+instance Semigroup' repr a => Semigroup (L repr a) where
   L a <> L b = L $ a %<> b
 
-instance Monoid' a repr => Monoid (L repr a) where
+instance Monoid' repr a => Monoid (L repr a) where
   mempty = L mempty'
 
-instance Num' a repr => Num (L repr a) where
+instance Num' repr a => Num (L repr a) where
   L a + L b = L $ a %+ b
   L a - L b = L $ a %- b
   L a * L b = L $ a %* b
@@ -248,11 +249,11 @@ instance Num' a repr => Num (L repr a) where
   signum (L a) = L $ signum' a
   fromInteger = L . fromInteger
 
-instance (Applicative repr, Fractional' a repr) => Fractional (L repr a) where
+instance (Applicative repr, Fractional' repr a) => Fractional (L repr a) where
   fromRational = L . fromRational' . pure
   recip = L . recip' . unL
 
-instance (Applicative repr, Floating' a repr) => Floating (L repr a) where
+instance (Applicative repr, Floating' repr a) => Floating (L repr a) where
   pi = L pi'
   exp (L x) = L $ exp' x
   log (L x) = L $ log' x
@@ -268,17 +269,17 @@ instance (Applicative repr, Floating' a repr) => Floating (L repr a) where
   acosh (L x) = L $ acosh' x
   atanh (L x) = L $ atanh' x
 
-class Semigroup' a repr where
+class Semigroup' repr a where
   (%<>) :: repr a -> repr a -> repr a
   default (%<>) :: (Semigroup a, Applicative repr) => repr a -> repr a -> repr a
   (%<>) = liftA2 (<>)
 
-class Semigroup' a repr => Monoid' a repr where
+class Semigroup' repr a => Monoid' repr a where
   mempty' :: repr a
   default mempty' :: (Monoid a, Applicative repr) => repr a
   mempty' = pure mempty
 
-class Num (repr a) => Num' a repr where
+class Num (repr a) => Num' repr a where
   plus' :: repr a -> repr a -> repr a
   minus' :: repr a -> repr a -> repr a
   times' :: repr a -> repr a -> repr a
@@ -302,20 +303,20 @@ class Num (repr a) => Num' a repr where
   fromInteger' = fmap fromInteger
 
 infixl 6 %+
-(%+) :: Num' a repr => repr a -> repr a -> repr a
+(%+) :: Num' repr a => repr a -> repr a -> repr a
 (%+) = plus'
 
 infixl 6 %-
-(%-) :: Num' a repr => repr a -> repr a -> repr a
+(%-) :: Num' repr a => repr a -> repr a -> repr a
 (%-) = minus'
 
 infixl 7 %*
-(%*) :: Num' a repr => repr a -> repr a -> repr a
+(%*) :: Num' repr a => repr a -> repr a -> repr a
 (%*) = times'
 
-instance Num a => Num' a Identity
+instance Num a => Num' Identity a
 
-class (Num' a repr, Fractional (repr a)) => Fractional' a repr where
+class (Num' repr a, Fractional (repr a)) => Fractional' repr a where
   fdiv' :: repr a -> repr a -> repr a
   recip' :: repr a -> repr a
   fromRational' :: repr Rational -> repr a
@@ -326,13 +327,13 @@ class (Num' a repr, Fractional (repr a)) => Fractional' a repr where
   default fromRational' :: (Fractional a, Applicative repr) => repr Rational -> repr a
   fromRational' = fmap fromRational
 
-instance Fractional a => Fractional' a Identity
+instance Fractional a => Fractional' Identity a
 
 infixl 7 %/
-(%/) :: Fractional' a repr => repr a -> repr a -> repr a
+(%/) :: Fractional' repr a => repr a -> repr a -> repr a
 (%/) = fdiv'
 
-class (Fractional' a repr, Floating (repr a)) => Floating' a repr where
+class (Fractional' repr a, Floating (repr a)) => Floating' repr a where
   pi' :: repr a
   exp' :: repr a -> repr a
   log' :: repr a -> repr a
@@ -388,48 +389,48 @@ class (Fractional' a repr, Floating (repr a)) => Floating' a repr where
   default atanh' :: (Floating a, Applicative repr) => repr a -> repr a
   atanh' = fmap atanh
 
-instance Floating a => Floating' a Identity
+instance Floating a => Floating' Identity a
 
 infixr 8 %**
-(%**) :: Floating' a repr => repr a -> repr a -> repr a
+(%**) :: Floating' repr a => repr a -> repr a -> repr a
 (%**) = exponent'
 
-class (Num' a repr, Ord' a repr) => Real' a repr where
+class (Num' repr a, Ord' repr a) => Real' repr a where
   toRational' :: repr a -> repr Rational
   default toRational' :: (Real a, Functor repr) => repr a -> repr Rational
   toRational' = fmap toRational
 
-instance Real a => Real' a Identity
+instance Real a => Real' Identity a
 
-class (Tuple2 repr, Integral' Int repr, Real' a repr, Fractional' a repr) => RealFrac' a repr where
-  properFraction' :: forall b. Integral' b repr => repr a -> repr (b, a)
-  truncate' :: forall b. Integral' b repr => repr a -> repr b
-  round' :: forall b. Integral' b repr => repr a -> repr b
-  ceiling' :: forall b. Integral' b repr => repr a -> repr b
-  floor' :: forall b. Integral' b repr => repr a -> repr b
-  default properFraction' :: forall b. (Functor repr, RealFrac a, Integral' b repr) => repr a -> repr (b, a)
+class (Tuple2 repr, Integral' repr Int, Real' repr a, Fractional' repr a) => RealFrac' repr a where
+  properFraction' :: forall b. Integral' repr b => repr a -> repr (b, a)
+  truncate' :: forall b. Integral' repr b => repr a -> repr b
+  round' :: forall b. Integral' repr b => repr a -> repr b
+  ceiling' :: forall b. Integral' repr b => repr a -> repr b
+  floor' :: forall b. Integral' repr b => repr a -> repr b
+  default properFraction' :: forall b. (Functor repr, RealFrac a, Integral' repr b) => repr a -> repr (b, a)
   properFraction' = fmap properFraction
-  default truncate' :: forall b. (Functor repr, RealFrac a, Integral' b repr) => repr a -> repr b
+  default truncate' :: forall b. (Functor repr, RealFrac a, Integral' repr b) => repr a -> repr b
   truncate' = fmap truncate
-  default round' :: forall b. (Functor repr, RealFrac a, Integral' b repr) => repr a -> repr b
+  default round' :: forall b. (Functor repr, RealFrac a, Integral' repr b) => repr a -> repr b
   round' = fmap round
-  default ceiling' :: forall b. (Functor repr, RealFrac a, Integral' b repr) => repr a -> repr b
+  default ceiling' :: forall b. (Functor repr, RealFrac a, Integral' repr b) => repr a -> repr b
   ceiling' = fmap ceiling
-  default floor' :: forall b. (Functor repr, RealFrac a, Integral' b repr) => repr a -> repr b
+  default floor' :: forall b. (Functor repr, RealFrac a, Integral' repr b) => repr a -> repr b
   floor' = fmap floor
 
-instance RealFrac a => RealFrac' a Identity
+instance RealFrac a => RealFrac' Identity a
 
-divModF' :: (RealFrac' a repr, Integral' b repr) => repr a -> repr a -> repr (b, a)
+divModF' :: (RealFrac' repr a, Integral' repr b) => repr a -> repr a -> repr (b, a)
 divModF' n d = properFraction' (n %/ d)
 
-divF' :: (Proj1 (a, b) a repr, RealFrac' b repr, Integral' a repr) => repr b -> repr b -> repr a
+divF' :: (RealFrac' repr b, Integral' repr a) => repr b -> repr b -> repr a
 divF' n d = pi1' $ divModF' n d
 
-modF' :: forall a repr. (Integral' Int repr, RealFrac' a repr) => repr a -> repr a -> repr a
-modF' n d = pi2' $ divModF' @a @repr @Int n d
+modF' :: forall a repr. (RealFrac' repr a) => repr a -> repr a -> repr a
+modF' n d = pi2' $ divModF' @repr @a @Int n d
 
-class Enum' a repr where
+class Enum' repr a where
   succ' :: repr a -> repr a
   pred' :: repr a -> repr a
   toEnum' :: repr Int -> repr a
@@ -455,9 +456,9 @@ class Enum' a repr where
   default enumFromThenTo' :: (Enum a, Applicative repr) => repr a -> repr a -> repr a -> repr [a]
   enumFromThenTo' = liftA3 enumFromThenTo
 
-instance Enum a => Enum' a Identity
+instance Enum a => Enum' Identity a
 
-class (Real' a repr, Enum' a repr, Integral a) => Integral' a repr where
+class (Real' repr a, Enum' repr a, Integral a) => Integral' repr a where
   quot' :: repr a -> repr a -> repr a
   rem' :: repr a -> repr a -> repr a
   div' :: repr a -> repr a -> repr a
@@ -480,9 +481,9 @@ class (Real' a repr, Enum' a repr, Integral a) => Integral' a repr where
   default toInteger' :: (Integral a, Applicative repr) => repr a -> repr Integer
   toInteger' = fmap toInteger
 
-instance Integral a => Integral' a Identity
+instance Integral a => Integral' Identity a
 
-fromIntegral' :: (Integral' a repr, Num' b repr) => repr a -> repr b
+fromIntegral' :: (Integral' repr a, Num' repr b) => repr a -> repr b
 fromIntegral' = fromInteger' . toInteger'
 
 class LiftBool repr where
@@ -510,24 +511,24 @@ unlift1 = (join .) $ fmap $ \(T1 fa) -> sequence fa
 
 newtype T2 repr f a b = T2 { unT2 :: f (repr a) (repr b) }
 
-class Lambda repr => Functor' f repr where
+class Lambda repr => Functor' repr f where
   fmap' :: repr (Arr repr a b) -> repr (f a) -> repr (f b)
   default fmap' :: (Lambda repr, Functor repr, f ~ T1 repr g, Functor g) => repr (Arr repr a b) -> repr (f a) -> repr (f b)
   fmap' rf rx = flip fmap rx $ \(T1 x) -> T1 $ fmap (rf %$) x
 
-instance {-# OVERLAPPABLE #-} Functor f => Functor' (T1 Identity f) Identity
+instance {-# OVERLAPPABLE #-} Functor f => Functor' Identity (T1 Identity f)
 
-instance Lambda repr => Functor' (T2 repr (->) a) repr where
+instance Lambda repr => Functor' repr (T2 repr (->) a) where
   fmap' = (%.)
 
-instance (Lambda repr, Tuple2 repr) => Functor' ((,) a) repr where
+instance (Lambda repr, Tuple2 repr) => Functor' repr ((,) a) where
   fmap' f ab = tup2' (pi1' ab) $ f %$ pi2' ab
 
 infixl 4 <%$>
-(<%$>) :: Functor' f repr => repr (Arr repr a b) -> repr (f a) -> repr (f b)
+(<%$>) :: Functor' repr f => repr (Arr repr a b) -> repr (f a) -> repr (f b)
 (<%$>) = fmap'
 
-class Functor' f repr => Applicative' f repr where
+class Functor' repr f => Applicative' repr f where
   pure' :: repr a -> repr (f a)
   ap' :: repr (f (Arr repr a b)) -> repr (f a) -> repr (f b)
   default pure' :: (f ~ T1 repr g, Applicative g, Applicative repr) => repr a -> repr (f a)
@@ -536,28 +537,28 @@ class Functor' f repr => Applicative' f repr where
   ap' = liftA2 $ \(T1 ff) (T1 fx) -> T1 $ liftA2 (%$) ff fx
 
 infixl 4 <%*>
-(<%*>) :: Applicative' f repr => repr (f (Arr repr a b)) -> repr (f a) -> repr (f b)
+(<%*>) :: Applicative' repr f => repr (f (Arr repr a b)) -> repr (f a) -> repr (f b)
 (<%*>) = ap'
 
-liftA2' :: Applicative' f repr => repr (Arr repr a (Arr repr b c)) -> repr (f a) -> repr (f b) -> repr (f c)
+liftA2' :: Applicative' repr f => repr (Arr repr a (Arr repr b c)) -> repr (f a) -> repr (f b) -> repr (f c)
 liftA2' f x y = f <%$> x <%*> y
 
-instance {-# OVERLAPPABLE #-} Applicative f => Applicative' (T1 Identity f) Identity
+instance {-# OVERLAPPABLE #-} Applicative f => Applicative' Identity (T1 Identity f)
 
-instance Lambda repr => Applicative' (T2 repr (->) a) repr where
+instance Lambda repr => Applicative' repr (T2 repr (->) a) where
   pure' x = lam $ \_ -> x
   ap' f x = lam $ \a -> f %$ a %$ (x %$ a)
 
-class Foldable' t repr where
-  foldMap' :: Monoid' m repr => repr (Arr repr a m) -> repr (t a) -> repr m
+class Foldable' repr t where
+  foldMap' :: Monoid' repr m => repr (Arr repr a m) -> repr (t a) -> repr m
   foldr' :: repr (t a) -> repr b -> repr (Arr repr a (Arr repr b b)) -> repr b
   foldr1' :: repr (t a) -> repr (Arr repr a (Arr repr a a)) -> repr (Maybe' repr a)
   foldl'' :: repr (t a) -> repr b -> repr (Arr repr b (Arr repr a b)) -> repr b
   foldl1' :: repr (t a) -> repr (Arr repr a (Arr repr a a)) -> repr (Maybe' repr a)
   length' :: repr (t a) -> repr Int
-  product' :: Num' a repr => repr (t a) -> repr a
+  product' :: Num' repr a => repr (t a) -> repr a
   default foldMap'
-    :: (Monoid' m repr, Lambda repr, Monad repr, t ~ T1 repr g, Foldable g)
+    :: (Monoid' repr m, Lambda repr, Monad repr, t ~ T1 repr g, Foldable g)
     => repr (Arr repr a m)
     -> repr (t a)
     -> repr m
@@ -598,19 +599,19 @@ class Foldable' t repr where
     -> repr Int
   length' = fmap (length . unT1)
   default product'
-    :: (Num' a repr, Monad repr, t ~ T1 repr g, Foldable g)
+    :: (Num' repr a, Monad repr, t ~ T1 repr g, Foldable g)
     => repr (t a)
     -> repr a
   product' = join . fmap (unL . getProduct . foldMap (Product . L) . unT1)
 
-mconcat' :: (Lambda repr, Monoid' m repr, Foldable' t repr) => repr (t m) -> repr m
+mconcat' :: (Lambda repr, Monoid' repr m, Foldable' repr t) => repr (t m) -> repr m
 mconcat' = foldMap' id'
 
-instance {-# OVERLAPPABLE #-} Foldable f => Foldable' (T1 Identity f) Identity
+instance {-# OVERLAPPABLE #-} Foldable f => Foldable' Identity (T1 Identity f)
 
 type Maybe' repr = T1 repr Maybe
 
-class Functor' (T1 repr Maybe) repr => LiftMaybe repr where
+class Functor' repr (T1 repr Maybe) => LiftMaybe repr where
   nothing' :: repr (T1 repr Maybe a)
   just' :: repr a -> repr (T1 repr Maybe a)
   maybe' :: repr (T1 repr Maybe b) -> repr a -> repr (Arr repr b a) -> repr a
@@ -625,7 +626,7 @@ instance LiftMaybe Identity
 
 type List' repr = T1 repr []
 
-class (Functor' (T1 repr []) repr, Foldable' (T1 repr []) repr) => LiftList repr where
+class (Functor' repr (T1 repr []), Foldable' repr (T1 repr [])) => LiftList repr where
   nil' :: repr (T1 repr [] a)
   cons' :: repr a -> repr (T1 repr [] a) -> repr (T1 repr [] a)
   default nil' :: Applicative repr => repr (T1 repr [] a)
@@ -643,16 +644,16 @@ last' xs = foldr' xs nothing' $ lam \y -> lam \ys -> maybe' ys (just' y) (lam ju
 
 -- TODO: This is a little bit unsatisfactory because Set can't be T1 usefully
 class LiftList repr => LiftSet repr where
-  fromList' :: Ord' a repr => repr (List' repr a) -> repr (Set a)
-  toAscList' :: Ord' a repr => repr (Set a) -> repr (List' repr a)
-  default fromList' :: (Monad repr, Ord' a repr, List' repr ~ T1 repr []) => repr (List' repr a) -> repr (Set a)
+  fromList' :: Ord' repr a => repr (List' repr a) -> repr (Set a)
+  toAscList' :: Ord' repr a => repr (Set a) -> repr (List' repr a)
+  default fromList' :: (Monad repr, Ord' repr a, List' repr ~ T1 repr []) => repr (List' repr a) -> repr (Set a)
   fromList' = (join .) . fmap $ \(T1 xs) -> fmap (Set.fromList) $ sequence xs
-  default toAscList' :: (Monad repr, Ord' a repr, List' repr ~ T1 repr []) => Ord' a repr => repr (Set a) -> repr (List' repr a)
+  default toAscList' :: (Monad repr, Ord' repr a, List' repr ~ T1 repr []) => Ord' repr a => repr (Set a) -> repr (List' repr a)
   toAscList' = fmap $ T1 . fmap pure . Set.toAscList
 
 instance LiftSet Identity
 
-class Representable f => LiftRepresentable f repr where
+class Representable f => LiftRepresentable repr f where
   tabulate' :: (Rep f -> repr a) -> repr (T1 repr f a)
   index' :: repr (T1 repr f a) -> repr (Rep f) -> repr a
   default tabulate' :: Applicative repr => (Rep f -> repr a) -> repr (T1 repr f a)
@@ -660,7 +661,7 @@ class Representable f => LiftRepresentable f repr where
   default index' :: Monad repr => repr (T1 repr f a) -> repr (Rep f) -> repr a
   index' fs = join . ((flip fmap fs (\(T1 xs) -> index xs)) <*>)
 
-instance Representable f => LiftRepresentable f Identity
+instance Representable f => LiftRepresentable Identity f
 
 newtype Max' repr a = Max' { unMax' :: Maybe' repr a }
 
@@ -674,17 +675,17 @@ class LiftMaybe repr => LiftMax repr where
 
 instance LiftMax Identity
 
-instance (LiftMax repr, Ord' a repr) => Semigroup' (Max' repr a) repr where
+instance (LiftMax repr, Ord' repr a) => Semigroup' repr (Max' repr a) where
   r1 %<> r2 = maybe' (fromMax' r1) r2 $ lam \m1 -> maybe' (fromMax' r2) r1 $ lam \m2 -> toMax' $ just' $
     ordering' (compare' m1 m2) m2 m2 m1
 
-instance (LiftMax repr, Ord' a repr) => Monoid' (Max' repr a) repr where
+instance (LiftMax repr, Ord' repr a) => Monoid' repr (Max' repr a) where
   mempty' = toMax' nothing'
 
-maximum' :: (Lambda repr, Foldable' t repr, Ord' a repr, LiftMax repr) => repr (t a) -> repr (Maybe' repr a)
+maximum' :: (Lambda repr, Foldable' repr t, Ord' repr a, LiftMax repr) => repr (t a) -> repr (Maybe' repr a)
 maximum' = fromMax' . foldMap' (lam (toMax' . just'))
 
-maximumBy' :: (Lambda repr, Foldable' t repr, LiftOrdering repr) => repr (Arr repr a (Arr repr a Ordering)) -> repr (t a) -> repr (Maybe' repr a)
+maximumBy' :: (Lambda repr, Foldable' repr t, LiftOrdering repr) => repr (Arr repr a (Arr repr a Ordering)) -> repr (t a) -> repr (Maybe' repr a)
 maximumBy' f t = foldl1' t $ lam2 \x y -> ordering' (app2 f x y) y y x
 
 newtype Endo' repr a = Endo' { unEndo' :: Arr repr a a }
@@ -699,14 +700,14 @@ class LiftEndo repr where
 
 instance LiftEndo Identity
 
-instance (Lambda repr, LiftEndo repr) => Semigroup' (Endo' repr a) repr where
+instance (Lambda repr, LiftEndo repr) => Semigroup' repr (Endo' repr a) where
   e1 %<> e2 = toEndo' $ fromEndo' e1 %. fromEndo' e2
 
-instance (Lambda repr, LiftEndo repr) => Monoid' (Endo' repr a) repr where
+instance (Lambda repr, LiftEndo repr) => Monoid' repr (Endo' repr a) where
   mempty' = toEndo' id'
 
 applyAll
-  :: (Lambda repr, LiftEndo repr, Functor' t repr, Foldable' t repr)
+  :: (Lambda repr, LiftEndo repr, Functor' repr t, Foldable' repr t)
   => repr (t (Arr repr a a))
   -> repr a
   -> repr a

@@ -36,7 +36,7 @@ deriving instance (Functor repr, Functor (Arr repr (AffineTransform repr Scalar)
 
 type Measure repr = Scaled repr Scalar
 
-class (Spatial repr, forall a. AffineAction' Scalar (Scaled repr a) repr) => Scales repr where
+class (Spatial repr, forall a. AffineAction' repr Scalar (Scaled repr a)) => Scales repr where
   toLocalScale :: repr Scalar -> repr LocalScale
   fromLocalScale :: repr LocalScale -> repr Scalar
   toGlobalScale :: repr Scalar -> repr GlobalScale
@@ -77,10 +77,10 @@ scaled f = toScaled $ lam $ \t -> lam $ \g -> lam $ \n -> f
   %$ fromGlobalScale g
   %$ fromNormalizedScale n
 
-instance (Scales repr) => AffineAction' Scalar (Scaled repr a) repr where
+instance (Scales repr) => AffineAction' repr Scalar (Scaled repr a) where
   actA' t f = toScaled $ lam $ \t' -> lam $ \g -> lam $ \n -> fromScaled f (t' %<> t) g n
 
-instance (Scales repr, Juxtapose a repr) => Juxtapose (Scaled repr a) repr where
+instance (Scales repr, Juxtapose repr a) => Juxtapose repr (Scaled repr a) where
   juxtapose v a b = toScaled $ lam \t -> lam \g -> lam \n -> juxtapose v (fromScaled a t g n) (fromScaled b t g n)
 
 withScaleOf
@@ -91,7 +91,7 @@ withScaleOf
   -> repr a
 withScaleOf f t e =
   let_ (averageScale (linearOf t)) $ \avgScale ->
-    let_ (product' @(List' repr) (fmap' (lam $ \x -> diameter x e) basis) %** (1 %/ fromIntegral' dimension)) $ \normalScale ->
+    let_ (product' @repr @(List' repr) (fmap' (lam $ \x -> diameter x e) basis) %** (1 %/ fromIntegral' dimension)) $ \normalScale ->
       fromScaled f t (toGlobalScale avgScale) (toNormalizedScale normalScale)
 
 output :: Scales repr => repr a -> repr (Scaled repr a)
@@ -106,8 +106,8 @@ global x = scaled $ lam3 \_ g _ -> g %* x
 normalized :: Scales repr => repr Scalar -> repr (Scaled repr Scalar)
 normalized x = scaled $ lam3 \_ _ n -> n %* x
 
-atLeast :: forall repr a b c d. (Spatial repr, Ord' d repr) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
+atLeast :: forall repr a b c d. (Spatial repr, Ord' repr d) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
 atLeast m1 m2 = curry3' $ liftA2' (lam $ \x -> lam $ max' x) (uncurry3' m1) (uncurry3' m2)
 
-atMost :: forall repr a b c d. (Spatial repr, Ord' d repr) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
+atMost :: forall repr a b c d. (Spatial repr, Ord' repr d) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
 atMost m1 m2 = curry3' $ liftA2' (lam $ \x -> lam $ min' x) (uncurry3' m1) (uncurry3' m2)
