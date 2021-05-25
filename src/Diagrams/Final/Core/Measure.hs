@@ -113,8 +113,8 @@ global x = scaled $ lam3 \_ g _ -> g %* x
 normalized :: Scales repr => repr Scalar -> repr (Scaled repr Scalar)
 normalized x = scaled $ lam3 \_ _ n -> n %* x
 
-atLeast :: forall repr a b c d. (Spatial repr, Ord' repr d) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
-atLeast m1 m2 = curry3' $ liftA2' (lam $ \x -> lam $ max' x) (uncurry3' m1) (uncurry3' m2)
+atLeast :: forall repr a . (Scales repr, Ord' repr a) => repr (Scaled repr a) -> repr (Scaled repr a) -> repr (Scaled repr a)
+atLeast m1 m2 = toScaled $ lam3 \x y z -> max' (fromScaled m1 x y z) (fromScaled m2 x y z)
 
-atMost :: forall repr a b c d. (Spatial repr, Ord' repr d) => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (Arr repr a (Arr repr b (Arr repr c d)))
-atMost m1 m2 = curry3' $ liftA2' (lam $ \x -> lam $ min' x) (uncurry3' m1) (uncurry3' m2)
+atMost :: forall repr a . (Scales repr, Ord' repr a) => repr (Scaled repr a) -> repr (Scaled repr a) -> repr (Scaled repr a)
+atMost m1 m2 = toScaled $ lam3 \x y z -> min' (fromScaled m1 x y z) (fromScaled m2 x y z)

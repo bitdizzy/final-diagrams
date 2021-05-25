@@ -31,6 +31,7 @@ import Diagrams.Final.Core.Base
 import Diagrams.Final.Core.Envelope
 import Diagrams.Final.Core.Measure
 import Diagrams.Final.Core.Space
+import Diagrams.Final.Core.Style
 import Diagrams.Final.Core.Trace
 
 data DiagramContext repr = DiagramContext
@@ -53,13 +54,13 @@ transformContext t (DiagramContext e tr) = DiagramContext (actA' t e) (actA' t t
 
 class ( Envelopes repr, Traces repr, Scales repr
       , Monoid' repr style
-      , AffineAction' repr Scalar style
+      , Style repr style
       , AffineAction' repr Scalar prim
       ) => Diagrams repr style ann prim | repr -> style ann prim where
   prim :: repr (Envelope repr) -> repr (Trace repr) -> repr prim -> repr (Diagram repr style ann prim)
   delayed :: repr (Envelope repr) -> repr (Trace repr) -> repr (Scaled repr (Diagram repr style ann a)) -> repr (Diagram repr style ann a)
   ann :: repr ann -> repr (Diagram repr style ann a) -> repr (Diagram repr style ann a)
-  style :: repr style -> repr (Diagram repr style ann a) -> repr (Diagram repr style ann a)
+  styleDia :: repr style -> repr (Diagram repr style ann a) -> repr (Diagram repr style ann a)
   -- TODO: This isn't written in the same style as other higher order DSL functions
   modifyContext :: (DiagramContext repr -> DiagramContext repr) -> repr (Diagram repr style ann a) -> repr (Diagram repr style ann a)
   -- TODO: Bleh
@@ -75,8 +76,8 @@ class ( Envelopes repr, Traces repr, Scales repr
   ann x = fmap $ \(Diagram d) -> Diagram \f ->
     let (ctx, r) = d f
      in (ctx, f $ DiaF_Ann x r)
-  default style :: (Functor repr) => repr style -> repr (Diagram repr style ann a) -> repr (Diagram repr style ann a)
-  style x = fmap $ \(Diagram d) -> Diagram \f ->
+  default styleDia :: (Functor repr) => repr style -> repr (Diagram repr style ann a) -> repr (Diagram repr style ann a)
+  styleDia x = fmap $ \(Diagram d) -> Diagram \f ->
     let (ctx, r) = d f
      in (ctx, f $ DiaF_Style x r)
   default modifyContext :: (Functor repr) => (DiagramContext repr -> DiagramContext repr) -> repr (Diagram repr style ann a) -> repr (Diagram repr style ann a)
@@ -113,6 +114,9 @@ instance Diagrams repr style ann prim => Traced repr (Diagram repr style ann pri
   traceOf = traceDia
 
 instance Diagrams repr style ann prim => Juxtapose repr (Diagram repr style ann prim)
+
+instance Diagrams repr style ann prim => Styled repr style (Diagram repr style ann prim) where
+  style' = styleDia
 
 -- | We can implement diagrams as trees
 -- The F-algebra supplied should respect the monoid structure of its carrier

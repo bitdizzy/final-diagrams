@@ -25,6 +25,7 @@ library
     Diagrams.Final.Core.Space
     Diagrams.Final.Core.Space.Primitive
     Diagrams.Final.Core.Space.TwoD
+    Diagrams.Final.Core.Style
     Diagrams.Final.Core.Trace
     Diagrams.Final.Core.Type
     Diagrams.Final.Align

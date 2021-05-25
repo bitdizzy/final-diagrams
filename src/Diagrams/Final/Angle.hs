@@ -5,7 +5,6 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 module Diagrams.Final.Angle where
 
-import Control.Lens
 import Linear
 
 import Diagrams.Final.Core
