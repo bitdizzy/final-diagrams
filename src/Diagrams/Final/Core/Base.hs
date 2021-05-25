@@ -232,43 +232,6 @@ infix 4 %>=
 
 infixr 6 %<>
 
-newtype L repr a = L { unL :: repr a }
-
-instance Semigroup' repr a => Semigroup (L repr a) where
-  L a <> L b = L $ a %<> b
-
-instance Monoid' repr a => Monoid (L repr a) where
-  mempty = L mempty'
-
-instance Num' repr a => Num (L repr a) where
-  L a + L b = L $ a %+ b
-  L a - L b = L $ a %- b
-  L a * L b = L $ a %* b
-  negate (L a) = L $ negate' a
-  abs (L a) = L $ abs' a
-  signum (L a) = L $ signum' a
-  fromInteger = L . fromInteger
-
-instance (Applicative repr, Fractional' repr a) => Fractional (L repr a) where
-  fromRational = L . fromRational' . pure
-  recip = L . recip' . unL
-
-instance (Applicative repr, Floating' repr a) => Floating (L repr a) where
-  pi = L pi'
-  exp (L x) = L $ exp' x
-  log (L x) = L $ log' x
-  sin (L x) = L $ sin' x
-  cos (L x) = L $ cos' x
-  asin (L x) = L $ asin' x
-  acos (L x) = L $ acos' x
-  atan (L x) = L $ atan' x
-  sinh (L x) = L $ sinh' x
-  cosh (L x) = L $ cosh' x
-  tanh (L x) = L $ tanh' x
-  asinh (L x) = L $ asinh' x
-  acosh (L x) = L $ acosh' x
-  atanh (L x) = L $ atanh' x
-
 class Semigroup' repr a where
   (%<>) :: repr a -> repr a -> repr a
   default (%<>) :: (Semigroup a, Applicative repr) => repr a -> repr a -> repr a
@@ -543,6 +506,9 @@ infixl 4 <%*>
 liftA2' :: Applicative' repr f => repr (Arr repr a (Arr repr b c)) -> repr (f a) -> repr (f b) -> repr (f c)
 liftA2' f x y = f <%$> x <%*> y
 
+liftA3' :: Applicative' repr f => repr (Arr repr a (Arr repr b (Arr repr c d))) -> repr (f a) -> repr (f b) -> repr (f c) -> repr (f d)
+liftA3' f x y z = f <%$> x <%*> y <%*> z
+
 instance {-# OVERLAPPABLE #-} Applicative f => Applicative' Identity (T1 Identity f)
 
 instance Lambda repr => Applicative' repr (T2 repr (->) a) where
@@ -712,3 +678,45 @@ applyAll
   -> repr a
   -> repr a
 applyAll = app . fromEndo' . mconcat' . fmap' (lam toEndo')
+
+--
+-- Reflection
+--
+
+newtype L repr a = L { unL :: repr a }
+
+instance Semigroup' repr a => Semigroup (L repr a) where
+  L a <> L b = L $ a %<> b
+
+instance Monoid' repr a => Monoid (L repr a) where
+  mempty = L mempty'
+
+instance Num' repr a => Num (L repr a) where
+  L a + L b = L $ a %+ b
+  L a - L b = L $ a %- b
+  L a * L b = L $ a %* b
+  negate (L a) = L $ negate' a
+  abs (L a) = L $ abs' a
+  signum (L a) = L $ signum' a
+  fromInteger = L . fromInteger
+
+instance (Applicative repr, Fractional' repr a) => Fractional (L repr a) where
+  fromRational = L . fromRational' . pure
+  recip = L . recip' . unL
+
+instance (Applicative repr, Floating' repr a) => Floating (L repr a) where
+  pi = L pi'
+  exp (L x) = L $ exp' x
+  log (L x) = L $ log' x
+  sin (L x) = L $ sin' x
+  cos (L x) = L $ cos' x
+  asin (L x) = L $ asin' x
+  acos (L x) = L $ acos' x
+  atan (L x) = L $ atan' x
+  sinh (L x) = L $ sinh' x
+  cosh (L x) = L $ cosh' x
+  tanh (L x) = L $ tanh' x
+  asinh (L x) = L $ asinh' x
+  acosh (L x) = L $ acosh' x
+  atanh (L x) = L $ atanh' x
+

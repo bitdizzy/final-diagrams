@@ -64,6 +64,13 @@ class (Spatial repr, forall a. AffineAction' repr Scalar (Scaled repr a)) => Sca
 
 instance Scales Identity
 
+instance Scales repr => Functor' repr (Scaled repr) where
+  fmap' f = toScaled . (\k -> lam3 \x y z -> f %$ k x y z) . fromScaled
+
+instance Scales repr => Applicative' repr (Scaled repr) where
+  pure' x = toScaled $ lam3 \_ _ _ -> x
+  ap' sf sx = toScaled $ lam3 \x y z -> fromScaled sf x y z %$ fromScaled sx x y z
+
 scaled'
   :: (Scales repr)
   => repr (Arr repr (AffineTransform repr Scalar) (Arr repr (LocalScale) (Arr repr GlobalScale (Arr repr NormalizedScale a))))
