@@ -7,6 +7,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
@@ -31,7 +32,7 @@ data Attribute repr a tp where
   Attribute_Scaled :: repr (Scaled repr a) -> Attribute repr a 'ScaledA
   Attribute_Transformed :: AffineAction' repr Scalar a => repr a -> Attribute repr a 'TransformedA
 
-class Scales repr => Attributes repr where
+class (forall a tp. Val repr (Attribute repr a tp), Scales repr) => Attributes repr where
   invariantA' :: repr a -> repr (Attribute repr a 'InvariantA)
   scaledA' :: repr (Scaled repr a) -> repr (Attribute repr a 'ScaledA)
   transformedA' :: AffineAction' repr Scalar a => repr a -> repr (Attribute repr a 'TransformedA)

@@ -113,6 +113,7 @@ class Proj1 repr x y | x -> y where
 
 instance Proj1 Identity (a, b) a
 instance Proj1 Identity (a, b, c) a
+instance Proj1 Identity (a, b, c, d) a
 
 class Proj2 repr x y | x -> y where
   pi2' :: repr x -> repr y
@@ -121,6 +122,7 @@ class Proj2 repr x y | x -> y where
 
 instance Proj2 Identity (a, b) b
 instance Proj2 Identity (a, b, c) b
+instance Proj2 Identity (a, b, c, d) b
 
 class Proj3 repr x y | x -> y where
   pi3' :: repr x -> repr y
@@ -128,6 +130,14 @@ class Proj3 repr x y | x -> y where
   pi3' = fmap (view _3)
 
 instance Proj3 Identity (a, b, c) c
+instance Proj3 Identity (a, b, c, d) c
+
+class Proj4 repr x y | x -> y where
+  pi4' :: repr x -> repr y
+  default pi4' :: (Field4 x x y y, Functor repr) => repr x -> repr y
+  pi4' = fmap (view _4)
+
+instance Proj4 Identity (a, b, c, d) d
 
 class (forall a b. Proj1 repr (a, b) a, forall a b. Proj2 repr (a, b) b) => Tuple2 repr where
   tup2' :: repr a -> repr b -> repr (a, b)
@@ -142,6 +152,13 @@ class (forall a b c. Proj1 repr (a, b, c) a, forall a b c. Proj2 repr (a, b, c) 
   tup3' = liftA3 (,,)
 
 instance Tuple3 Identity
+
+class (forall a b c d. Proj1 repr (a, b, c, d) a, forall a b c d. Proj2 repr (a, b, c, d) b, forall a b c d. Proj3 repr (a, b, c, d) c, forall a b c d. Proj4 repr (a, b, c, d) d) => Tuple4 repr where
+  tup4' :: repr a -> repr b -> repr c -> repr d -> repr (a, b, c, d)
+  default tup4' :: Applicative repr => repr a -> repr b -> repr c -> repr d -> repr (a, b, c, d)
+  tup4' w x y z = (,,,) <$> w <*> x <*> y <*> z
+
+instance Tuple4 Identity
 
 --
 -- Prelude

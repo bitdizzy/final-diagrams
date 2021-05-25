@@ -140,7 +140,7 @@ infixl 6 %.-^
 instance Affine' Identity (T1 Identity T.Point) where
 
 type SpatialConstraints repr =
-   ( Tuple2 repr, Tuple3 repr
+   ( Tuple2 repr, Tuple3 repr, Tuple4 repr
    , Integral' repr Int
    , LiftBool repr
    , LiftMaybe repr, LiftList repr, LiftSet repr, LiftMax repr, LiftEndo repr
