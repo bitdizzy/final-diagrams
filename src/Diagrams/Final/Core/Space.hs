@@ -249,14 +249,24 @@ relativeF p f = (p %.+^) . f . (%.-. p)
 aff :: (Spatial repr, Num' repr n) => repr (LinearTransform repr n) -> repr (AffineTransform repr n)
 aff l = affineOf l zero'
 
-moveTo :: (Spatial repr, Num' repr n, AffineAction' repr n a) => repr (Point repr n) -> repr a -> repr a
-moveTo p = actA' (translateBy (p %.-. origin))
+class Spatial repr => HasOrigin repr a where
+  moveOriginBy :: repr (Vector repr Scalar) -> repr a -> repr a
+  default moveOriginBy :: AffineAction' repr Scalar a => repr (Vector repr Scalar) -> repr a -> repr a
+  moveOriginBy v = actA' (translateBy (negated' v))
 
-moveOriginTo :: (Spatial repr, Num' repr n, AffineAction' repr n a) => repr (Point repr n) -> repr a -> repr a
-moveOriginTo p = actA' (translateBy (origin %.-. p))
+instance Spatial repr => HasOrigin repr (Point repr Scalar)
 
-moveOriginBy :: (Spatial repr, Num' repr n, AffineAction' repr n a) => repr (Vector repr n) -> repr a -> repr a
-moveOriginBy v = actA' (translateBy (negated' v))
+instance (HasOrigin repr a, LiftList repr) => HasOrigin repr (List' repr a) where
+  moveOriginBy v = fmap' (lam (moveOriginBy v))
+
+instance (HasOrigin repr a, Ord' repr a, LiftSet repr) => HasOrigin repr (Set a) where
+  moveOriginBy v = fromList' . fmap' (lam (moveOriginBy v)) . toAscList'
+
+moveTo :: (Spatial repr, HasOrigin repr a) => repr (Point repr Scalar) -> repr a -> repr a
+moveTo p = moveOriginBy (p %.-. origin)
+
+moveOriginTo :: (Spatial repr, HasOrigin repr a) => repr (Point repr Scalar) -> repr a -> repr a
+moveOriginTo p = moveOriginBy (origin %.-. p)
 
 instance Semigroup' Identity (LinearTransform Identity Scalar)
 instance Monoid' Identity (LinearTransform Identity Scalar)

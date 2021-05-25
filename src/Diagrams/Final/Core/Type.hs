@@ -140,6 +140,8 @@ instance
   ) => AffineAction' repr Scalar (Diagram repr style ann a) where
   actA' = transformDia
 
+instance Diagrams repr style ann prim => HasOrigin repr (Diagram repr style ann prim)
+
 data DiagramFold repr style ann a x = DiagramFold
   { _diagramFold_transform :: repr (AffineTransform repr Scalar) -> x -> x
   , _diagramFold_style :: repr style -> x -> x

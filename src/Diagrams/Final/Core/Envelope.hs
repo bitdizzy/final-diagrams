@@ -75,6 +75,8 @@ instance (Lambda repr, Envelopes repr) => AffineAction' repr Scalar (Envelope re
         let_ (actL' (adjoint l) v) $ \v' ->
            (quadrance' v' %* (f %$ v') %+ v `dot'` t) %/ quadrance' v
 
+instance (Lambda repr, Envelopes repr) => HasOrigin repr (Envelope repr)
+
 instance (Lambda repr, Envelopes repr) => Semigroup' repr (Envelope repr) where
   e1 %<> e2 = withEnvelope e1 e2 $ lam $ \f1 -> withEnvelope e2 emptyEnvelope $ lam $ \f2 ->
    envelope $ lam $ \v -> max' (f1 %$ v) (f2 %$ v)

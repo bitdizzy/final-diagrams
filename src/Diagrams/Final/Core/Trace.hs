@@ -51,6 +51,8 @@ instance (Lambda repr, Traces repr) => AffineAction' repr Scalar (Trace repr) wh
       toTrace $ lam $ \p -> lam $ \v ->
         appTrace t (actA' (inverseAffine a) p) (actL' (inverseLinear l) v)
 
+instance (Lambda repr, Traces repr) => HasOrigin repr (Trace repr)
+
 instance (Lambda repr, Traces repr) => Semigroup' repr (Trace repr) where
   t1 %<> t2 = toTrace $ lam $ \p -> lam $ \v -> appTrace t1 p v %<> appTrace t2 p v
 

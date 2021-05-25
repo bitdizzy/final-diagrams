@@ -10,7 +10,7 @@ import Data.Set (Set)
 
 import Diagrams.Final.Core
 
-class (AffineAction' repr Scalar a, Spatial repr) => Alignable repr a where
+class (HasOrigin repr a, Spatial repr) => Alignable repr a where
   alignBy'
     :: repr (Arr repr (Vector repr Scalar) (Arr repr a (Point repr Scalar)))
     -> repr (Vector repr Scalar)
@@ -24,13 +24,6 @@ class (AffineAction' repr Scalar a, Spatial repr) => Alignable repr a where
     -> repr a
     -> repr a
   alignBy = alignBy' defaultBoundary
-  default alignBy'
-    :: (AffineAction' repr Scalar a)
-    => repr (Arr repr (Vector repr Scalar) (Arr repr a (Point repr Scalar)))
-    -> repr (Vector repr Scalar)
-    -> repr Scalar
-    -> repr a
-    -> repr a
   alignBy' boundary v d a = flip moveOriginTo a $ lerp'
     ((d %+ 1) %/ 2)
     (boundary %$ v %$ a)
