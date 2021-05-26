@@ -42,6 +42,8 @@ class (LiftInterval repr, Parametric repr p (PDom p) (PCod p)) => HasArcLength r
   arcLengthBounded :: repr Scalar -> repr p -> repr (Interval' repr Scalar)
   arcLength :: repr Scalar -> repr p -> repr Scalar
   arcLengthToParam :: repr Scalar -> repr p -> repr Scalar -> repr (PDom p)
+  default arcLength :: Spatial repr => repr Scalar -> repr p -> repr Scalar
+  arcLength eps = midpoint' . arcLengthBounded eps
 
 stdArcLength :: (Spatial repr, HasArcLength repr p) => repr p -> repr Scalar
 stdArcLength = arcLength stdTolerance
