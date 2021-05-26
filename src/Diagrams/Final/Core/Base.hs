@@ -46,6 +46,11 @@ class Val1 repr f where
 
 instance Val1 Identity f
 
+-- TODO: Product types can be Unval'd reasonably for any Functor this
+-- could allow certain eliminators to be written without a Monad instance
+class Unval1 repr f where
+  unval1 :: repr (T1 repr f a) -> f (repr a)
+
 --
 -- HOAS
 --
@@ -476,6 +481,18 @@ class LiftBool repr where
   false' = pure False
   default if' :: Applicative repr => repr Bool -> repr a -> repr a -> repr a
   if' = liftA3 $ \b x y -> if b then x else y
+
+not' :: LiftBool repr => repr Bool -> repr Bool
+not' b = if' b false' true'
+
+infixr 2 %||
+infixr 3 %&&
+
+(%||) :: LiftBool repr => repr Bool -> repr Bool -> repr Bool
+a %|| b = if' a true' $ if' b true' false'
+
+(%&&) :: LiftBool repr => repr Bool -> repr Bool -> repr Bool
+a %&& b = if' a (if' b true' false') false'
 
 instance LiftBool Identity
 

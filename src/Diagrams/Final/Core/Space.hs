@@ -201,6 +201,9 @@ class
   affineOf
     :: forall n. Num' repr n
     => repr (LinearTransform repr n) -> repr (Vector repr n) -> repr (AffineTransform repr n)
+  stdTolerance
+    :: forall n. Fractional' repr n
+    => repr n
   default basis
     :: (Num' repr n, Applicative repr)
     => repr (List' repr (Vector repr n))
@@ -242,6 +245,7 @@ class
     :: (Num' repr n, Applicative repr) => repr (LinearTransform repr n) -> repr (Vector repr n) -> repr (AffineTransform repr n)
   affineOf = liftA2 $ \(T1 l) (T1 v) -> T1 $ fmap unL $ view (from T.relativeToOrigin) $
     Pair (fmap L l) (fmap L v)
+  stdTolerance = 1.0e-6
 
 relativeF :: (Spatial repr, Num' repr n) => repr (Point repr n) -> (repr (Vector repr n) -> repr (Vector repr n)) -> repr (Point repr n) -> repr (Point repr n)
 relativeF p f = (p %.+^) . f . (%.-. p)
