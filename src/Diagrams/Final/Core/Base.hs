@@ -165,6 +165,15 @@ class (forall a b c d. Proj1 repr (a, b, c, d) a, forall a b c d. Proj2 repr (a,
 
 instance Tuple4 Identity
 
+untup2 :: Tuple2 repr => repr (a, b) -> (repr a, repr b)
+untup2 xy = (pi1' xy, pi2' xy)
+
+untup3 :: Tuple3 repr => repr (a, b, c) -> (repr a, repr b, repr c)
+untup3 xyz = (pi1' xyz, pi2' xyz, pi3' xyz)
+
+untup4 :: Tuple4 repr => repr (a, b, c, d) -> (repr a, repr b, repr c, repr d)
+untup4 wxyz = (pi1' wxyz, pi2' wxyz, pi3' wxyz, pi4' wxyz)
+
 --
 -- Prelude
 --
@@ -318,12 +327,14 @@ infixl 7 %/
 (%/) :: Fractional' repr a => repr a -> repr a -> repr a
 (%/) = fdiv'
 
+infixr 8 %**
+
 class (Fractional' repr a, Floating (repr a)) => Floating' repr a where
   pi' :: repr a
   exp' :: repr a -> repr a
   log' :: repr a -> repr a
   sqrt' :: repr a -> repr a
-  exponent' :: repr a -> repr a -> repr a
+  (%**) :: repr a -> repr a -> repr a
   logBase' :: repr a -> repr a -> repr a
   sin' :: repr a -> repr a
   cos' :: repr a -> repr a
@@ -345,8 +356,8 @@ class (Fractional' repr a, Floating (repr a)) => Floating' repr a where
   log' = fmap log
   default sqrt' :: (Floating a, Applicative repr) => repr a -> repr a
   sqrt' = fmap sqrt
-  default exponent' :: (Floating a, Applicative repr) => repr a -> repr a -> repr a
-  exponent' = liftA2 (**)
+  default (%**) :: (Floating a, Applicative repr) => repr a -> repr a -> repr a
+  (%**) = liftA2 (**)
   default logBase' :: (Floating a, Applicative repr) => repr a -> repr a -> repr a
   logBase' = liftA2 logBase
   default sin' :: (Floating a, Applicative repr) => repr a -> repr a
@@ -375,10 +386,6 @@ class (Fractional' repr a, Floating (repr a)) => Floating' repr a where
   atanh' = fmap atanh
 
 instance Floating a => Floating' Identity a
-
-infixr 8 %**
-(%**) :: Floating' repr a => repr a -> repr a -> repr a
-(%**) = exponent'
 
 class (Num' repr a, Ord' repr a) => Real' repr a where
   toRational' :: repr a -> repr Rational
@@ -414,6 +421,66 @@ divF' n d = pi1' $ divModF' n d
 
 modF' :: forall a repr. (RealFrac' repr a) => repr a -> repr a -> repr a
 modF' n d = pi2' $ divModF' @repr @a @Int n d
+
+infixr 8 %^
+infixr 8 %^^
+
+(%^) :: (LiftBool repr, Integral' repr Int, Num' repr a) => repr a -> repr Int -> repr a
+x0 %^ y0 = ordering' (compare' y0 0) (error "Negative exponent") 1 $
+  let f x y = if' (even' y) (f (x %* x) (y `quot'` 2)) $ if' (y %== 1) x $
+        g (x %* x) (y `quot'` 2) x
+      g x y z = if' (even' y) (g (x %* x) (y `quot'` 2) z) $ if' (y %== 1) (x %* z) $
+        g (x %* x) (y `quot'` 2) (x %* z)
+   in f x0 y0
+
+(%^^) :: (LiftBool repr, Integral' repr Int, Fractional' repr a) => repr a -> repr Int -> repr a
+x %^^ n = if' (n %>= 0) (x %^ n) (recip' (x %^ negate' n))
+
+class (Num' repr Integer, Num' repr Int, Floating' repr a, RealFrac' repr a) => RealFloat' repr a where
+  floatRadix' :: repr a -> repr Integer
+  floatDigits' :: repr a -> repr Int
+  floatRange' :: repr a -> repr (Int, Int)
+  decodeFloat' :: repr a -> repr (Integer, Int)
+  encodeFloat' :: repr Integer -> repr Int -> repr a
+  exponent' :: repr a -> repr Int
+  significand' :: repr a -> repr a
+  scaleFloat' :: repr Int -> repr a -> repr a
+  isNaN' :: repr a -> repr Bool
+  isInfinite' :: repr a -> repr Bool
+  isDenormalized' :: repr a -> repr Bool
+  isNegativeZero' :: repr a -> repr Bool
+  isIEEE' :: repr a -> repr Bool
+  atan2' :: repr a -> repr a -> repr a
+  default floatRadix' :: (Applicative repr, RealFloat a) => repr a -> repr Integer
+  floatRadix' = fmap floatRadix
+  default floatDigits' :: (Applicative repr, RealFloat a) => repr a -> repr Int
+  floatDigits' = fmap floatDigits
+  default floatRange' :: (Applicative repr, RealFloat a) => repr a -> repr (Int, Int)
+  floatRange' = fmap floatRange
+  default decodeFloat' :: (Applicative repr, RealFloat a) => repr a -> repr (Integer, Int)
+  decodeFloat' = fmap decodeFloat
+  default encodeFloat' :: (Applicative repr, RealFloat a) => repr Integer -> repr Int -> repr a
+  encodeFloat' = liftA2 encodeFloat
+  default exponent' :: (Applicative repr, RealFloat a) => repr a -> repr Int
+  exponent' = fmap exponent
+  default significand' :: (Applicative repr, RealFloat a) => repr a -> repr a
+  significand' = fmap significand
+  default scaleFloat' :: (Applicative repr, RealFloat a) => repr Int -> repr a -> repr a
+  scaleFloat' = liftA2 scaleFloat
+  default isNaN' :: (Applicative repr, RealFloat a) => repr a -> repr Bool
+  isNaN' = fmap isNaN
+  default isInfinite' :: (Applicative repr, RealFloat a) => repr a -> repr Bool
+  isInfinite' = fmap isInfinite
+  default isDenormalized' :: (Applicative repr, RealFloat a) => repr a -> repr Bool
+  isDenormalized' = fmap isDenormalized
+  default isNegativeZero' :: (Applicative repr, RealFloat a) => repr a -> repr Bool
+  isNegativeZero' = fmap isNegativeZero
+  default isIEEE' :: (Applicative repr, RealFloat a) => repr a -> repr Bool
+  isIEEE' = fmap isIEEE
+  default atan2' :: (Applicative repr, RealFloat a) => repr a -> repr a -> repr a
+  atan2' = liftA2 atan2
+
+instance RealFloat a => RealFloat' Identity a
 
 class Enum' repr a where
   succ' :: repr a -> repr a
@@ -470,6 +537,12 @@ instance Integral a => Integral' Identity a
 
 fromIntegral' :: (Integral' repr a, Num' repr b) => repr a -> repr b
 fromIntegral' = fromInteger' . toInteger'
+
+even' :: (LiftBool repr, Integral' repr a) => repr a -> repr Bool
+even' n = n `rem'` 2 %== 0
+
+odd' :: (LiftBool repr, Integral' repr a) => repr a -> repr Bool
+odd' = not' . even'
 
 class LiftBool repr where
   true' :: repr Bool
@@ -626,7 +699,8 @@ instance LiftMaybe Identity
 
 type List' repr = T1 repr []
 
-class (Functor' repr (T1 repr []), Foldable' repr (T1 repr [])) => LiftList repr where
+-- TODO: Define the superclass instances internally
+class (Val1 repr [], Functor' repr (T1 repr []), Applicative' repr (T1 repr []), Foldable' repr (T1 repr [])) => LiftList repr where
   nil' :: repr (T1 repr [] a)
   cons' :: repr a -> repr (T1 repr [] a) -> repr (T1 repr [] a)
   default nil' :: Applicative repr => repr (T1 repr [] a)

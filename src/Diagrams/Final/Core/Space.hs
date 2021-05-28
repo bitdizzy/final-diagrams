@@ -148,7 +148,7 @@ type SpatialConstraints repr =
    , Val1 repr T.Vector, Val1 repr T.Point, Val1 repr T.LinearTransform, Val1 repr T.AffineTransform
    , LiftRepresentable repr T.Vector, LiftRepresentable repr T.Point
    , Functor' repr (List' repr), Foldable' repr (List' repr)
-   , Conjugate' repr Scalar, Num' repr Scalar, Floating' repr Scalar, Fractional' repr Scalar, RealFrac' repr Scalar, Eq' repr Scalar, Ord' repr Scalar
+   , Conjugate' repr Scalar, Num' repr Scalar, Floating' repr Scalar, Fractional' repr Scalar, RealFrac' repr Scalar, RealFloat' repr Scalar, Eq' repr Scalar, Ord' repr Scalar
    , Functor' repr (Vector repr), Foldable' repr (Vector repr), Additive' repr (Vector repr), Additive' repr (Point repr)
    , Metric' repr (Vector repr), Affine' repr (Point repr), Diff' (Point repr) repr ~ Vector repr
    , Semigroup' repr (LinearTransform repr Scalar), Monoid' repr (LinearTransform repr Scalar)

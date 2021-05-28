@@ -231,6 +231,7 @@ instance (Integral n, Monad repr) => Integral' (MonadicDiagram repr prim style a
 instance (Fractional n, Monad repr) => Fractional' (MonadicDiagram repr prim style ann) n
 instance (Floating n, Monad repr) => Floating' (MonadicDiagram repr prim style ann) n
 instance (RealFrac n, Monad repr) => RealFrac' (MonadicDiagram repr prim style ann) n
+instance (RealFloat n, Monad repr) => RealFloat' (MonadicDiagram repr prim style ann) n
 instance (Functor f, Monad repr) => Functor' (MonadicDiagram repr prim style ann) (T1 (MonadicDiagram repr prim style ann) f)
 instance (Applicative f, Monad repr) => Applicative' (MonadicDiagram repr prim style ann) (T1 (MonadicDiagram repr prim style ann) f)
 instance (Foldable f, Monad repr) => Foldable' (MonadicDiagram repr prim style ann) (T1 (MonadicDiagram repr prim style ann) f)
@@ -261,6 +262,8 @@ instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.Vector
 instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.Point
 instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.LinearTransform
 instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.AffineTransform
+instance Monad repr => Val1 (MonadicDiagram repr prim style ann) []
+instance Monad repr => Val1 (MonadicDiagram repr prim style ann) Maybe
 instance Monad repr => LiftRepresentable (MonadicDiagram repr prim style ann) T.Vector
 instance Monad repr => LiftRepresentable (MonadicDiagram repr prim style ann) T.Point
 
