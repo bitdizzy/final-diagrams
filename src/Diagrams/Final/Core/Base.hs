@@ -684,7 +684,7 @@ instance {-# OVERLAPPABLE #-} Foldable f => Foldable' Identity (T1 Identity f)
 
 type Maybe' repr = T1 repr Maybe
 
-class Functor' repr (T1 repr Maybe) => LiftMaybe repr where
+class (Val1 repr Maybe, Applicative' repr (T1 repr Maybe)) => LiftMaybe repr where
   nothing' :: repr (T1 repr Maybe a)
   just' :: repr a -> repr (T1 repr Maybe a)
   maybe' :: repr (T1 repr Maybe b) -> repr a -> repr (Arr repr b a) -> repr a
@@ -709,6 +709,14 @@ class (Val1 repr [], Functor' repr (T1 repr []), Applicative' repr (T1 repr []),
   cons' x = fmap $ \(T1 xs) -> T1 (x:xs)
 
 instance LiftList Identity
+
+--TODO: Witherable?
+filter'
+  :: (LiftList repr, LiftBool repr)
+  => (repr a -> repr Bool)
+  -> repr (List' repr a)
+  -> repr (List' repr a)
+filter' f xs = foldr' xs nil' $ lam2 \x k -> if' (f x) (cons' x k) k
 
 dropWhile' :: (LiftBool repr, LiftList repr) => repr (Arr repr a Bool) -> repr (List' repr a) -> repr (List' repr a)
 dropWhile' p xs = foldr' xs nil' $ lam \y -> lam \ys -> if' (p %$ y) (cons' y ys) ys

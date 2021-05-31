@@ -5,10 +5,7 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 module Diagrams.Final.Solve where
 
-import Data.Functor.Identity
 import Diagrams.Final.Core
-
-import Debug.Trace
 
 quadForm
   :: forall repr d. (Spatial repr, Floating' repr d, Ord' repr d)

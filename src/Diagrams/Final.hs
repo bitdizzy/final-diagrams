@@ -10,3 +10,4 @@ import Diagrams.Final.Interval as X
 import Diagrams.Final.Located as X
 import Diagrams.Final.Parametric as X
 import Diagrams.Final.Points as X
+import Diagrams.Final.Segment as X
