@@ -242,6 +242,7 @@ instance (forall x. Num x => T.LinearAction x (f x), Num n, Functor f, Monad rep
 instance (forall x. Num x => T.AffineAction x (f x), Num n, Functor f, Monad repr) => AffineAction' (MonadicDiagram repr prim style ann) n (T1 (MonadicDiagram repr prim style ann) f n)
 instance Monad repr => LiftBool (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftMax (MonadicDiagram repr prim style ann)
+instance Monad repr => LiftMin (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftEndo (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftOrdering (MonadicDiagram repr prim style ann)
 instance Monad repr => LiftMaybe (MonadicDiagram repr prim style ann)
@@ -258,6 +259,8 @@ instance Monad repr => Monoid' (MonadicDiagram repr prim style ann) (Set Scalar)
 instance (Monad repr, T.IsDiffOf T.Point T.Vector, Semigroup a) => Semigroup' (MonadicDiagram repr prim style ann) (Diagram (MonadicDiagram repr prim style ann) style ann a)
 
 instance Monad repr => Val (MonadicDiagram repr prim style ann) Scalar
+instance Monad repr => Val (MonadicDiagram repr prim style ann) Integer
+instance Monad repr => Val (MonadicDiagram repr prim style ann) Rational
 instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.Vector
 instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.Point
 instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.LinearTransform
@@ -267,6 +270,7 @@ instance Monad repr => Val1 (MonadicDiagram repr prim style ann) Maybe
 instance Monad repr => LiftRepresentable (MonadicDiagram repr prim style ann) T.Vector
 instance Monad repr => LiftRepresentable (MonadicDiagram repr prim style ann) T.Point
 
+instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Numerics (MonadicDiagram repr prim style ann)
 instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Spatial (MonadicDiagram repr prim style ann)
 
 instance (T.IsDiffOf T.Point T.Vector, Monad repr) => Envelopes (MonadicDiagram repr prim style ann)

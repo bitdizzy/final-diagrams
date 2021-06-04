@@ -25,7 +25,7 @@ class (HasOrigin repr a, Spatial repr) => Alignable repr a where
     -> repr a
   alignBy = alignBy' defaultBoundary
   alignBy' boundary v d a = flip moveOriginTo a $ lerp'
-    ((d %+ 1) %/ 2)
+    ((d %+ num 1) %/ num 2)
     (boundary %$ v %$ a)
     (boundary %$ negated' v %$ a)
   default defaultBoundary :: (Envelopes repr, Enveloped repr a) => repr (Arr repr (Vector repr Scalar) (Arr repr a (Point repr Scalar)))
@@ -46,7 +46,7 @@ instance Traces repr => Alignable repr (Trace repr) where
 instance (Spatial repr, Alignable repr a, LiftList repr) => Alignable repr (List' repr a) where
   defaultBoundary = lam2 $ combineBoundaries defaultBoundary
 
-instance (Spatial repr, Alignable repr a, Ord' repr a, LiftSet repr) => Alignable repr (Set a) where
+instance (Spatial repr, Alignable repr a, Ord a, LiftSet repr) => Alignable repr (Set a) where
   defaultBoundary = lam2 $ \v xs -> combineBoundaries defaultBoundary v (toAscList' xs)
 
 instance (Diagrams repr style ann prim) => Alignable repr (Diagram repr style ann prim) where
@@ -76,14 +76,14 @@ snug
   => repr (Vector repr Scalar)
   -> repr a
   -> repr a
-snug v = snugBy v 1
+snug v = snugBy v (num 1)
 
 centerV
   :: Alignable repr a
   => repr (Vector repr Scalar)
   -> repr a
   -> repr a
-centerV v = alignBy v 0
+centerV v = alignBy v (num 0)
 
 center
   :: Alignable repr a
@@ -96,7 +96,7 @@ snugCenterV
   => repr (Vector repr Scalar)
   -> repr a
   -> repr a
-snugCenterV v = alignBy' traceBoundary v 0
+snugCenterV v = alignBy' traceBoundary v (num 0)
 
 snugCenter
   :: (Traces repr, Traced repr a, Alignable repr a)

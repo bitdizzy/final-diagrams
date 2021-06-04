@@ -37,28 +37,28 @@ class LiftAngle repr where
   fromRad' = fmap unAngle
 
 turn :: (LiftAngle repr, Floating' repr n) => repr n -> repr (Angle n)
-turn = rad' . (%* (2*pi))
+turn = rad' . (%* (num 2 %* pi'))
 
 fromTurn :: (LiftAngle repr, Floating' repr n) => repr (Angle n) -> repr n
-fromTurn = (%/ (2*pi)) . fromRad'
+fromTurn = (%/ (num 2 %* pi')) . fromRad'
 
 degrees :: (LiftAngle repr, Floating' repr n) => repr n -> repr (Angle n)
-degrees = rad' . (%* (2*pi/360))
+degrees = rad' . (%* (num 2 %* pi' %/ num 360))
 
 fromDegrees :: (LiftAngle repr, Floating' repr n) => repr (Angle n) -> repr n
-fromDegrees = (%/ (2*pi/360)) . fromRad'
+fromDegrees = (%/ (num 2 %* pi' %/ num 360)) . fromRad'
 
 fullTurn :: (LiftAngle repr, Floating' repr n) => repr (Angle n)
-fullTurn = turn 1
+fullTurn = turn (num 1)
 
 halfTurn :: (LiftAngle repr, Floating' repr n) => repr (Angle n)
-halfTurn = turn 0.5
+halfTurn = turn (fnum 0.5)
 
 quarterTurn :: (LiftAngle repr, Floating' repr n) => repr (Angle n)
-quarterTurn = turn 0.25
+quarterTurn = turn (fnum 0.25)
 
 angleBetween :: (LiftAngle repr, Metric' repr f, Floating' repr a, Ord' repr a) => repr (f a) -> repr (f a) -> repr (Angle a)
-angleBetween v1 v2 = rad' . acos' . min' 1 . max' (-1) $ signorm' v1 `dot'` signorm' v2
+angleBetween v1 v2 = rad' . acos' . min' (num 1) . max' (num (-1)) $ signorm' v1 `dot'` signorm' v2
 
 normalizeAngle :: (LiftAngle repr, RealFrac' repr n, Floating' repr n) => repr (Angle n) -> repr (Angle n)
-normalizeAngle = rad' . (`modF'` (2*pi)) . fromRad'
+normalizeAngle = rad' . (`modF'` (fnum 2 %*pi')) . fromRad'

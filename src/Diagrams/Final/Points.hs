@@ -13,5 +13,5 @@ centroid :: (Spatial repr, Functor' repr t, Foldable' repr t, Fractional' repr n
 centroid ps = meanV ps
 
 meanV :: (Spatial repr, Functor' repr t, Foldable' repr t, Additive' repr v, Fractional' repr a) => repr (t (v a)) -> repr (Maybe' repr (v a))
-meanV ps = fmap' (uncurry' $ lam2 (%^/)) $ foldl1' (fmap' (lam \v -> tup2' v 1) ps) $ lam2 $ \xc yc ->
+meanV ps = fmap' (uncurry' $ lam2 (%^/)) $ foldl1' (fmap' (lam \v -> tup2' v (num 1)) ps) $ lam2 $ \xc yc ->
   tup2' (pi1' xc %^+^ pi1' yc) (pi2' xc %+ pi2' yc)

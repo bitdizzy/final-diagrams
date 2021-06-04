@@ -9,6 +9,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes #-}
@@ -178,12 +179,12 @@ untup4 wxyz = (pi1' wxyz, pi2' wxyz, pi3' wxyz, pi4' wxyz)
 -- Prelude
 --
 
-class Eq a => Eq' repr a where
+class (LiftBool repr) => Eq' repr a where
   eq' :: repr a -> repr a -> repr Bool
   neq' :: repr a -> repr a -> repr Bool
-  default eq' :: Applicative repr => repr a -> repr a -> repr Bool
+  default eq' :: (Eq a, Applicative repr) => repr a -> repr a -> repr Bool
   eq' = liftA2 (==)
-  default neq' :: Applicative repr => repr a -> repr a -> repr Bool
+  default neq' :: (Eq a, Applicative repr) => repr a -> repr a -> repr Bool
   neq' = liftA2 (/=)
 
 instance Eq a => Eq' Identity a
@@ -200,24 +201,19 @@ class (Eq' repr Ordering) => LiftOrdering repr where
   ltV' :: repr Ordering
   eqV' :: repr Ordering
   gtV' :: repr Ordering
-  ordering' :: repr Ordering -> repr a -> repr a -> repr a -> repr a
+  ordering' :: repr Ordering -> (Ordering -> repr a) -> repr a
   default ltV' :: Applicative repr => repr Ordering
   ltV' = pure LT
   default eqV' :: Applicative repr => repr Ordering
   eqV' = pure EQ
   default gtV' :: Applicative repr => repr Ordering
   gtV' = pure GT
-  default ordering' :: Applicative repr => repr Ordering -> repr a -> repr a -> repr a -> repr a
-  ordering' rcmp ra rb rc =
-    let f cmp a b c = case cmp of
-          LT -> a
-          EQ -> b
-          GT -> c
-     in f <$> rcmp <*> ra <*> rb <*> rc
+  default ordering' :: Monad repr => repr Ordering -> (Ordering -> repr a) -> repr a
+  ordering' = (>>=)
 
 instance LiftOrdering Identity
 
-class (LiftOrdering repr, Eq' repr a, Ord a) => Ord' repr a where
+class (LiftOrdering repr, Eq' repr a) => Ord' repr a where
   compare' :: repr a -> repr a -> repr Ordering
   lt' :: repr a -> repr a -> repr Bool
   lte' :: repr a -> repr a -> repr Bool
@@ -225,19 +221,19 @@ class (LiftOrdering repr, Eq' repr a, Ord a) => Ord' repr a where
   gte' :: repr a -> repr a -> repr Bool
   max' :: repr a -> repr a -> repr a
   min' :: repr a -> repr a -> repr a
-  default compare' :: Applicative repr => repr a -> repr a -> repr Ordering
+  default compare' :: (Applicative repr, Ord a) => repr a -> repr a -> repr Ordering
   compare' = liftA2 compare
-  default lt' :: Applicative repr => repr a -> repr a -> repr Bool
+  default lt' :: (Applicative repr, Ord a) => repr a -> repr a -> repr Bool
   lt' = liftA2 (<)
-  default lte' :: Applicative repr => repr a -> repr a -> repr Bool
+  default lte' :: (Applicative repr, Ord a) => repr a -> repr a -> repr Bool
   lte' = liftA2 (<=)
-  default gt' :: Applicative repr => repr a -> repr a -> repr Bool
+  default gt' :: (Applicative repr, Ord a) => repr a -> repr a -> repr Bool
   gt' = liftA2 (>)
-  default gte' :: Applicative repr => repr a -> repr a -> repr Bool
+  default gte' :: (Applicative repr, Ord a) => repr a -> repr a -> repr Bool
   gte' = liftA2 (>=)
-  default max' :: Applicative repr => repr a -> repr a -> repr a
+  default max' :: (Applicative repr, Ord a) => repr a -> repr a -> repr a
   max' = liftA2 max
-  default min' :: Applicative repr => repr a -> repr a -> repr a
+  default min' :: (Applicative repr, Ord a) => repr a -> repr a -> repr a
   min' = liftA2 min
 
 instance Ord a => Ord' Identity a
@@ -273,7 +269,10 @@ class Semigroup' repr a => Monoid' repr a where
   default mempty' :: (Monoid a, Applicative repr) => repr a
   mempty' = pure mempty
 
-class Num (repr a) => Num' repr a where
+class (Integral' repr Integer) => Numerics repr
+instance Numerics Identity
+
+class Val repr Integer => Num' repr a where
   plus' :: repr a -> repr a -> repr a
   minus' :: repr a -> repr a -> repr a
   times' :: repr a -> repr a -> repr a
@@ -296,6 +295,9 @@ class Num (repr a) => Num' repr a where
   default fromInteger' :: (Num a, Applicative repr) => repr Integer -> repr a
   fromInteger' = fmap fromInteger
 
+num :: Num' repr a => Integer -> repr a
+num = fromInteger' . val
+
 infixl 6 %+
 (%+) :: Num' repr a => repr a -> repr a -> repr a
 (%+) = plus'
@@ -310,7 +312,7 @@ infixl 7 %*
 
 instance Num a => Num' Identity a
 
-class (Num' repr a, Fractional (repr a)) => Fractional' repr a where
+class (Val repr Rational, Num' repr a) => Fractional' repr a where
   fdiv' :: repr a -> repr a -> repr a
   recip' :: repr a -> repr a
   fromRational' :: repr Rational -> repr a
@@ -323,13 +325,16 @@ class (Num' repr a, Fractional (repr a)) => Fractional' repr a where
 
 instance Fractional a => Fractional' Identity a
 
+fnum :: Fractional' repr a => Rational -> repr a
+fnum = fromRational' . val
+
 infixl 7 %/
 (%/) :: Fractional' repr a => repr a -> repr a -> repr a
 (%/) = fdiv'
 
 infixr 8 %**
 
-class (Fractional' repr a, Floating (repr a)) => Floating' repr a where
+class (Fractional' repr a) => Floating' repr a where
   pi' :: repr a
   exp' :: repr a -> repr a
   log' :: repr a -> repr a
@@ -425,16 +430,19 @@ modF' n d = pi2' $ divModF' @repr @a @Int n d
 infixr 8 %^
 infixr 8 %^^
 
-(%^) :: (LiftBool repr, Integral' repr Int, Num' repr a) => repr a -> repr Int -> repr a
-x0 %^ y0 = ordering' (compare' y0 0) (error "Negative exponent") 1 $
-  let f x y = if' (even' y) (f (x %* x) (y `quot'` 2)) $ if' (y %== 1) x $
-        g (x %* x) (y `quot'` 2) x
-      g x y z = if' (even' y) (g (x %* x) (y `quot'` 2) z) $ if' (y %== 1) (x %* z) $
-        g (x %* x) (y `quot'` 2) (x %* z)
-   in f x0 y0
+(%^) :: (Numerics repr, LiftBool repr, Num' repr a) => repr a -> repr Integer -> repr a
+x0 %^ y0 = ordering' (compare' y0 (num 0)) \case
+  LT -> (error "Negative exponent")
+  EQ -> num 1
+  GT ->
+    let f x y = if' (even' y) (f (x %* x) (y `quot'` num 2)) $ if' (y %== num 1) x $
+          g (x %* x) (y `quot'` num 2) x
+        g x y z = if' (even' y) (g (x %* x) (y `quot'` num 2) z) $ if' (y %== num 1) (x %* z) $
+          g (x %* x) (y `quot'` num 2) (x %* z)
+     in f x0 y0
 
-(%^^) :: (LiftBool repr, Integral' repr Int, Fractional' repr a) => repr a -> repr Int -> repr a
-x %^^ n = if' (n %>= 0) (x %^ n) (recip' (x %^ negate' n))
+(%^^) :: (Numerics repr, LiftBool repr, Fractional' repr a) => repr a -> repr Integer -> repr a
+x %^^ n = if' (n %>= num 0) (x %^ n) (recip' (x %^ negate' n))
 
 class (Num' repr Integer, Num' repr Int, Floating' repr a, RealFrac' repr a) => RealFloat' repr a where
   floatRadix' :: repr a -> repr Integer
@@ -539,7 +547,7 @@ fromIntegral' :: (Integral' repr a, Num' repr b) => repr a -> repr b
 fromIntegral' = fromInteger' . toInteger'
 
 even' :: (LiftBool repr, Integral' repr a) => repr a -> repr Bool
-even' n = n `rem'` 2 %== 0
+even' n = n `rem'` num 2 %== num 0
 
 odd' :: (LiftBool repr, Integral' repr a) => repr a -> repr Bool
 odd' = not' . even'
@@ -629,6 +637,7 @@ class Foldable' repr t where
   foldl'' :: repr (t a) -> repr b -> repr (Arr repr b (Arr repr a b)) -> repr b
   foldl1' :: repr (t a) -> repr (Arr repr a (Arr repr a a)) -> repr (Maybe' repr a)
   length' :: repr (t a) -> repr Int
+  sum' :: Num' repr a => repr (t a) -> repr a
   product' :: Num' repr a => repr (t a) -> repr a
   default foldMap'
     :: (Monoid' repr m, Lambda repr, Monad repr, t ~ T1 repr g, Foldable g)
@@ -671,6 +680,11 @@ class Foldable' repr t where
     => repr (t a)
     -> repr Int
   length' = fmap (length . unT1)
+  default sum'
+    :: (Num' repr a, Monad repr, t ~ T1 repr g, Foldable g)
+    => repr (t a)
+    -> repr a
+  sum' = join . fmap (unL . getSum . foldMap (Sum . L) . unT1)
   default product'
     :: (Num' repr a, Monad repr, t ~ T1 repr g, Foldable g)
     => repr (t a)
@@ -726,11 +740,11 @@ last' xs = foldr' xs nothing' $ lam \y -> lam \ys -> maybe' ys (just' y) (lam ju
 
 -- TODO: This is a little bit unsatisfactory because Set can't be T1 usefully
 class LiftList repr => LiftSet repr where
-  fromList' :: Ord' repr a => repr (List' repr a) -> repr (Set a)
-  toAscList' :: Ord' repr a => repr (Set a) -> repr (List' repr a)
-  default fromList' :: (Monad repr, Ord' repr a, List' repr ~ T1 repr []) => repr (List' repr a) -> repr (Set a)
+  fromList' :: Ord a => repr (List' repr a) -> repr (Set a)
+  toAscList' :: Ord a => repr (Set a) -> repr (List' repr a)
+  default fromList' :: (Monad repr, Ord a, List' repr ~ T1 repr []) => repr (List' repr a) -> repr (Set a)
   fromList' = (join .) . fmap $ \(T1 xs) -> fmap (Set.fromList) $ sequence xs
-  default toAscList' :: (Monad repr, Ord' repr a, List' repr ~ T1 repr []) => Ord' repr a => repr (Set a) -> repr (List' repr a)
+  default toAscList' :: (Monad repr, Ord a, List' repr ~ T1 repr []) => Ord' repr a => repr (Set a) -> repr (List' repr a)
   toAscList' = fmap $ T1 . fmap pure . Set.toAscList
 
 instance LiftSet Identity
@@ -759,7 +773,10 @@ instance LiftMax Identity
 
 instance (LiftMax repr, Ord' repr a) => Semigroup' repr (Max' repr a) where
   r1 %<> r2 = maybe' (fromMax' r1) r2 $ lam \m1 -> maybe' (fromMax' r2) r1 $ lam \m2 -> toMax' $ just' $
-    ordering' (compare' m1 m2) m2 m2 m1
+    ordering' (compare' m1 m2) \case
+      LT -> m2
+      EQ -> m2
+      GT -> m1
 
 instance (LiftMax repr, Ord' repr a) => Monoid' repr (Max' repr a) where
   mempty' = toMax' nothing'
@@ -768,7 +785,41 @@ maximum' :: (Lambda repr, Foldable' repr t, Ord' repr a, LiftMax repr) => repr (
 maximum' = fromMax' . foldMap' (lam (toMax' . just'))
 
 maximumBy' :: (Lambda repr, Foldable' repr t, LiftOrdering repr) => repr (Arr repr a (Arr repr a Ordering)) -> repr (t a) -> repr (Maybe' repr a)
-maximumBy' f t = foldl1' t $ lam2 \x y -> ordering' (app2 f x y) y y x
+maximumBy' f t = foldl1' t $ lam2 \x y -> ordering' (app2 f x y) \case
+  LT -> y
+  EQ -> y
+  GT -> x
+
+newtype Min' repr a = Min' { unMin' :: Maybe' repr a }
+
+class LiftMaybe repr => LiftMin repr where
+  fromMin' :: repr (Min' repr a) -> repr (Maybe' repr a)
+  toMin' :: repr (Maybe' repr a) -> repr (Min' repr a)
+  default fromMin' :: Functor repr => repr (Min' repr a) -> repr (Maybe' repr a)
+  fromMin' = fmap unMin'
+  default toMin' :: Functor repr => repr (Maybe' repr a) -> repr (Min' repr a)
+  toMin' = fmap Min'
+
+instance LiftMin Identity
+
+instance (LiftMin repr, Ord' repr a) => Semigroup' repr (Min' repr a) where
+  r1 %<> r2 = maybe' (fromMin' r1) r2 $ lam \m1 -> maybe' (fromMin' r2) r1 $ lam \m2 -> toMin' $ just' $
+    ordering' (compare' m1 m2) \case
+      LT -> m1
+      EQ -> m1
+      GT -> m2
+
+instance (LiftMin repr, Ord' repr a) => Monoid' repr (Min' repr a) where
+  mempty' = toMin' nothing'
+
+minimum' :: (Lambda repr, Foldable' repr t, Ord' repr a, LiftMin repr) => repr (t a) -> repr (Maybe' repr a)
+minimum' = fromMin' . foldMap' (lam (toMin' . just'))
+
+minimumBy' :: (Lambda repr, Foldable' repr t, LiftOrdering repr) => repr (Arr repr a (Arr repr a Ordering)) -> repr (t a) -> repr (Maybe' repr a)
+minimumBy' f t = foldl1' t $ lam2 \x y -> ordering' (app2 f x y) \case
+  LT -> x
+  EQ -> x
+  GT -> y
 
 newtype Endo' repr a = Endo' { unEndo' :: Arr repr a a }
 
@@ -807,14 +858,14 @@ instance Semigroup' repr a => Semigroup (L repr a) where
 instance Monoid' repr a => Monoid (L repr a) where
   mempty = L mempty'
 
-instance Num' repr a => Num (L repr a) where
+instance (Num' repr a) => Num (L repr a) where
   L a + L b = L $ a %+ b
   L a - L b = L $ a %- b
   L a * L b = L $ a %* b
   negate (L a) = L $ negate' a
   abs (L a) = L $ abs' a
   signum (L a) = L $ signum' a
-  fromInteger = L . fromInteger
+  fromInteger = L . fromInteger' . val
 
 instance (Applicative repr, Fractional' repr a) => Fractional (L repr a) where
   fromRational = L . fromRational' . pure

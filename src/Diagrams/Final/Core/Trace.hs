@@ -74,7 +74,7 @@ instance (Lambda repr, Traces repr, Traced repr a, Traced repr b) => Traced repr
 instance (Lambda repr, Traces repr, LiftList repr, Traced repr a) => Traced repr (List' repr a) where
   traceOf = foldMap' (lam traceOf)
 
-instance (Lambda repr, Traces repr, LiftSet repr, Traced repr a, Ord' repr a) => Traced repr (Set a) where
+instance (Lambda repr, Traces repr, LiftSet repr, Traced repr a, Ord a) => Traced repr (Set a) where
   traceOf = traceOf . toAscList'
 
 traceV :: (Traces repr, Traced repr a) => repr (Point repr Scalar) -> repr (Vector repr Scalar) -> repr a -> repr (Maybe' repr (Vector repr Scalar))
@@ -90,7 +90,7 @@ maxTraceP :: (Traces repr, Traced repr a) => repr (Point repr Scalar) -> repr (V
 maxTraceP p v a = lam (p %.+^) <%$> maxTraceV p v a
 
 rayTraceOf :: (Traces repr, Traced repr a) => repr a -> repr (Point repr Scalar) -> repr (Vector repr Scalar) -> repr (List' repr Scalar)
-rayTraceOf a p v = dropWhile' (lam (%< 0)) $ toAscList' $ appTrace (traceOf a) p v
+rayTraceOf a p v = dropWhile' (lam (%< num 0)) $ toAscList' $ appTrace (traceOf a) p v
 
 rayTraceOfV :: (Traces repr, Traced repr a) => repr a -> repr (Point repr Scalar) -> repr (Vector repr Scalar) -> repr (Maybe' repr (Vector repr Scalar))
 rayTraceOfV a p v = foldr' (rayTraceOf a p v) nothing' $ lam $ \x -> lam $ \_ -> just' (x %*^ v)

@@ -17,7 +17,7 @@ module Diagrams.Final.Core.Envelope where
 
 import Control.Lens hiding (re)
 import Data.Set (Set)
-import Linear (zero, E(..))
+import Linear (E(..))
 
 import Diagrams.Final.Core.Base
 import Diagrams.Final.Core.Space
@@ -96,7 +96,7 @@ instance (Lambda repr, Envelopes repr, Enveloped repr a, Enveloped repr b) => En
 instance (Lambda repr, Envelopes repr, Enveloped repr a, LiftList repr) => Enveloped repr (List' repr a) where
   envelopeOf = foldMap' (lam envelopeOf)
 
-instance (Ord' repr a, Lambda repr, Envelopes repr, Enveloped repr a, LiftSet repr) => Enveloped repr (Set a) where
+instance (Ord a, Ord' repr a, Lambda repr, Envelopes repr, Enveloped repr a, LiftSet repr) => Enveloped repr (Set a) where
   envelopeOf = envelopeOf . toAscList'
 
 --TODO: Map instance
@@ -117,17 +117,17 @@ envelopeSMay :: (Envelopes repr, Enveloped repr a) => repr (Vector repr Scalar) 
 envelopeSMay v e = withEnvelope (envelopeOf e) nothing' $ lam $ \f -> just' $ (f %$ v) %* norm' v
 
 envelopeS :: (Envelopes repr, Enveloped repr a) => repr (Vector repr Scalar) -> repr a -> repr Scalar
-envelopeS v = (\m -> maybe' m 0 id') . envelopeSMay v
+envelopeS v = (\m -> maybe' m (num 0) id') . envelopeSMay v
 
 pointEnvelope :: Envelopes repr => repr (Point repr Scalar) -> repr (Envelope repr)
-pointEnvelope p = moveTo p $ envelope $ lam \_ -> 0
+pointEnvelope p = moveTo p $ envelope $ lam \_ -> num 0
 
 diameter
   :: Envelopes repr
   => repr (Vector repr Scalar)
   -> repr (Envelope repr)
   -> repr Scalar
-diameter v e = maybe' (extent v e) 0
+diameter v e = maybe' (extent v e) (num 0)
   (lam $ \tup ->
      let_ (pi1' tup) $ \lo -> let_ (pi2' tup) $ \hi ->
        hi %- lo %* norm' v
@@ -138,7 +138,7 @@ radius
   => repr (Vector repr Scalar)
   -> repr (Envelope repr)
   -> repr Scalar
-radius v = (0.5 %*) . diameter v
+radius v = (fnum 0.5 %*) . diameter v
 
 extent
   :: (Envelopes repr, LiftMaybe repr, Lambda repr, Tuple2 repr)
@@ -149,7 +149,7 @@ extent v e = withEnvelope e nothing' $ lam $ \f ->
   just' $ tup2' (negate' (f $% negated' v)) (f $% v)
 
 size :: Envelopes repr => repr (Envelope repr) -> repr (Vector repr Scalar)
-size d = tabulate' $ \(E l) -> diameter (val1 (zero & l .~ 1)) d
+size d = tabulate' $ \(E l) -> diameter (val1 (pure (num 0) & l .~ num 1)) d
 
 -- Juxtaposition
 
@@ -167,7 +167,7 @@ instance (Envelopes repr, Enveloped repr a, Enveloped repr b, HasOrigin repr a, 
 
 instance (Envelopes repr, Enveloped repr a, HasOrigin repr a) => Juxtapose repr (List' repr a)
 
-instance (Envelopes repr, Enveloped repr a, Ord' repr a, HasOrigin repr a) => Juxtapose repr (Set a)
+instance (Envelopes repr, Enveloped repr a, Ord a, Ord' repr a, HasOrigin repr a) => Juxtapose repr (Set a)
 
 instance (Envelopes repr, Juxtapose repr b) => Juxtapose repr (Arr repr a b) where
   juxtapose v f1 f2 = lam $ \a -> juxtapose v (f1 %$ a) (f2 %$ a)

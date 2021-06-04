@@ -141,9 +141,9 @@ instance Affine' Identity (T1 Identity T.Point) where
 
 type SpatialConstraints repr =
    ( Tuple2 repr, Tuple3 repr, Tuple4 repr
-   , Integral' repr Int
+   , Numerics repr, Integral' repr Int
    , LiftBool repr
-   , LiftMaybe repr, LiftList repr, LiftSet repr, LiftMax repr, LiftEndo repr
+   , LiftMaybe repr, LiftList repr, LiftSet repr, LiftMax repr, LiftMin repr, LiftEndo repr
    , Val repr Scalar
    , Val1 repr T.Vector, Val1 repr T.Point, Val1 repr T.LinearTransform, Val1 repr T.AffineTransform
    , LiftRepresentable repr T.Vector, LiftRepresentable repr T.Point
@@ -245,7 +245,7 @@ class
     :: (Num' repr n, Applicative repr) => repr (LinearTransform repr n) -> repr (Vector repr n) -> repr (AffineTransform repr n)
   affineOf = liftA2 $ \(T1 l) (T1 v) -> T1 $ fmap unL $ view (from T.relativeToOrigin) $
     Pair (fmap L l) (fmap L v)
-  stdTolerance = 1.0e-6
+  stdTolerance = fnum 1.0e-6
 
 relativeF :: (Spatial repr, Num' repr n) => repr (Point repr n) -> (repr (Vector repr n) -> repr (Vector repr n)) -> repr (Point repr n) -> repr (Point repr n)
 relativeF p f = (p %.+^) . f . (%.-. p)
@@ -263,7 +263,7 @@ instance Spatial repr => HasOrigin repr (Point repr Scalar)
 instance (HasOrigin repr a, LiftList repr) => HasOrigin repr (List' repr a) where
   moveOriginBy v = fmap' (lam (moveOriginBy v))
 
-instance (HasOrigin repr a, Ord' repr a, LiftSet repr) => HasOrigin repr (Set a) where
+instance (HasOrigin repr a, Ord a, LiftSet repr) => HasOrigin repr (Set a) where
   moveOriginBy v = fromList' . fmap' (lam (moveOriginBy v)) . toAscList'
 
 instance (Tuple2 repr, HasOrigin repr a, HasOrigin repr b) => HasOrigin repr (a, b) where
@@ -306,7 +306,7 @@ instance (Tuple2 repr, AffineAction' repr n a, AffineAction' repr n b) => Affine
 instance (LiftList repr, AffineAction' repr n a) => AffineAction' repr n (List' repr a) where
   actA' f = fmap' $ lam $ actA' f
 
-instance (LiftSet repr, Ord' repr a, AffineAction' repr n a) => AffineAction' repr n (Set a) where
+instance (LiftSet repr, Ord a, AffineAction' repr n a) => AffineAction' repr n (Set a) where
   actA' f = fromList' . actA' f . toAscList'
 
 dimension :: forall repr. Spatial repr => repr Int

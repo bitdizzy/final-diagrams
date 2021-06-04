@@ -98,7 +98,7 @@ withScaleOf
   -> repr a
 withScaleOf f t e =
   let_ (averageScale (linearOf t)) $ \avgScale ->
-    let_ (product' @repr @(List' repr) (fmap' (lam $ \x -> diameter x e) basis) %** (1 %/ fromIntegral' dimension)) $ \normalScale ->
+    let_ (product' @repr @(List' repr) (fmap' (lam $ \x -> diameter x e) basis) %** (num 1 %/ fromIntegral' dimension)) $ \normalScale ->
       fromScaled f t (toGlobalScale avgScale) (toNormalizedScale normalScale)
 
 output :: Scales repr => repr a -> repr (Scaled repr a)
