@@ -260,6 +260,7 @@ instance (Monad repr, T.IsDiffOf T.Point T.Vector, Semigroup a) => Semigroup' (M
 
 instance Monad repr => Val (MonadicDiagram repr prim style ann) Scalar
 instance Monad repr => Val (MonadicDiagram repr prim style ann) Integer
+instance Monad repr => Val (MonadicDiagram repr prim style ann) Int
 instance Monad repr => Val (MonadicDiagram repr prim style ann) Rational
 instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.Vector
 instance Monad repr => Val1 (MonadicDiagram repr prim style ann) T.Point

@@ -1,6 +1,7 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
@@ -12,8 +13,11 @@
 {-# LANGUAGE UndecidableSuperClasses #-}
 module Diagrams.Final.Segment where
 
+import Data.Functor.Identity
+
 import Diagrams.Final.Core
 import qualified Diagrams.Final.Interval as I
+import Diagrams.Final.Located
 import Diagrams.Final.Parametric
 import Diagrams.Final.Solve
 
@@ -38,6 +42,8 @@ class Spatial repr => Offsets repr where
   default offset'' :: Monad repr => repr (Offset repr c) -> (forall c'. Offset repr c' -> repr (r c')) -> repr (r c)
   offset'' = (>>=)
 
+instance Offsets Identity
+
 instance Offsets repr => LinearAction' repr Scalar (Offset repr c) where
   actL' t o = offset'' o $ \case
     Offset_Open -> offset_open
@@ -60,6 +66,8 @@ class Offsets repr => Segments repr where
   segment' = (>>=)
   default segment'' :: Monad repr => repr (Segment repr c) -> (forall c'. Segment repr c' -> repr (r c')) -> repr (r c)
   segment'' = (>>=)
+
+instance Segments Identity
 
 -- TODO: Switch to external function arguments in most places
 mapSegmentVectors
@@ -190,3 +198,141 @@ instance (I.LiftInterval repr, Segments repr) => HasArcLength repr (Segment repr
               if' (len `I.member'` slen) (num 1) $ if' (len %> I.sup' slen) (num 2 %* arcLengthToParam m (pi1' (splitAtParam s (num 2))) len) $
                 if' (len %< I.sup' llen) ((%* fnum 0.5) $ arcLengthToParam m l len) $
                   (%+ fnum 0.5) . (%* fnum 0.5) $ arcLengthToParam (num 9 %* m %/ num 10) r (len %- I.midpoint' llen)
+
+-- Fixed segments
+
+data FixedSegment repr
+   = FixedLinear (repr (Point repr Scalar)) (repr (Point repr Scalar))
+   | FixedCubic (repr (Point repr Scalar)) (repr (Point repr Scalar)) (repr (Point repr Scalar)) (repr (Point repr Scalar))
+
+class Spatial repr => FixedSegments repr where
+  linearF :: repr (Point repr Scalar) -> repr (Point repr Scalar) -> repr (FixedSegment repr)
+  cubicF :: repr (Point repr Scalar) ->  repr (Point repr Scalar) -> repr (Point repr Scalar) -> repr (Point repr Scalar) -> repr (FixedSegment repr)
+  segmentF' :: repr (FixedSegment repr) -> (FixedSegment repr -> repr r) -> repr r
+  default linearF :: Applicative repr => repr (Point repr Scalar) -> repr (Point repr Scalar) -> repr (FixedSegment repr)
+  linearF x0 x1 = pure $ FixedLinear x0 x1
+  default cubicF :: Applicative repr => repr (Point repr Scalar) ->  repr (Point repr Scalar) -> repr (Point repr Scalar) -> repr (Point repr Scalar) -> repr (FixedSegment repr)
+  cubicF x0 c0 c1 x1 = pure $ FixedCubic x0 c0 c1 x1
+  default segmentF' :: Monad repr => repr (FixedSegment repr) -> (FixedSegment repr -> repr r) -> repr r
+  segmentF' = (>>=)
+
+instance FixedSegments Identity
+
+locatedToFixed :: (LiftLocated repr, Segments repr, FixedSegments repr) => repr (Located repr (Segment repr 'Closed)) -> repr (FixedSegment repr)
+locatedToFixed ls = located' ls $ \s p -> segment' s $ \case
+  Linear o -> offset' o $ \case
+    Offset_Closed v -> linearF p (p %.+^ v)
+  Cubic c1 c2 o -> offset' o $ \case
+    Offset_Closed v -> cubicF p (p %.+^ c1) (p %.+^ c2) (p %.+^ v)
+
+fixedToLocated :: (LiftLocated repr, Segments repr, FixedSegments repr) => repr (FixedSegment repr) -> repr (Located repr (Segment repr 'Closed))
+fixedToLocated fs = segmentF' fs $ \case
+  FixedLinear p0 p1 -> linearS (offset_closed (p1 %.-. p0)) `locatedAt'` p0
+  FixedCubic p0 c1 c2 p1 -> cubicS (c1 %.-. p0) (c2 %.-. p0) (offset_closed (p1 %.-. p0)) `locatedAt'` p0
+
+instance FixedSegments repr => Parametric repr (FixedSegment repr) Scalar (Point repr Scalar) where
+  type PDom (FixedSegment repr) = Scalar
+  type PCod (FixedSegment repr) = Point repr Scalar
+  atParam s t = segmentF' s $ \case
+    FixedLinear p0 p1 -> lerp' t p1 p0
+    FixedCubic p1 c1 c2 p2 ->
+      let_ (lerp' t c1 p1) \p11 ->
+      let_ (lerp' t c2 c1) \p12 ->
+      let_ (lerp' t p2 c2) \p13 ->
+      let_ (lerp' t p12 p11) \p21 ->
+      let_ (lerp' t p13 p12) \p22 ->
+        lerp' t p22 p21
+
+instance FixedSegments repr => DomainBounds repr (FixedSegment repr) where
+  domainLower _ = num 0
+  domainUpper _ = num 1
+  evalAtLower fs = segmentF' fs $ \case
+    FixedLinear p0 _ -> p0
+    FixedCubic p0 _ _ _ -> p0
+  evalAtUpper fs = segmentF' fs $ \case
+    FixedLinear _ p1 -> p1
+    FixedCubic _ _ _ p1 -> p1
+
+instance FixedSegments repr => Sectionable repr (FixedSegment repr) where
+  splitAtParam fs t = segmentF' fs $ \case
+    FixedLinear p0 p1 -> let_ (lerp' t p1 p0) \p -> tup2' (linearF p0 p) (linearF p p1)
+    (FixedCubic p0 c1 c2 p1) ->
+      let_ (lerp' t c1 p0) \a ->
+      let_ (lerp' t c2 c1) \p ->
+      let_ (lerp' t p1 c2) \d ->
+      let_ (lerp' t p a) \b ->
+      let_ (lerp' t d p) \c ->
+      let_ (lerp' t c b) \cut ->
+        tup2' (cubicF p0 a b cut) (cubicF cut c d p1)
+  reverseDomain fs = segmentF' fs $ \case
+    FixedLinear p0 p1 -> linearF p1 p0
+    FixedCubic p0 c1 c2 p1 -> cubicF p1 c2 c1 p0
+
+data SegMeasure repr = SegMeasure
+  { _segMeasure_count :: repr Int
+  , _segMeasure_arcLength :: repr (I.Interval' repr Scalar)
+  , _segMeasure_arcLengthF :: repr (Arr repr Scalar (I.Interval' repr Scalar))
+  , _segMeasure_offset :: repr (Vector repr Scalar)
+  , _segMeasure_envelope :: repr (Envelope repr)
+  , _segMeasure_trace :: repr (Trace repr)
+  }
+
+class (I.LiftInterval repr, Envelopes repr, Traces repr, Segments repr) => LiftSegMeasure repr where
+  liftMeasure :: SegMeasure repr -> repr (SegMeasure repr)
+  measureSeg :: repr (Segment repr 'Closed) -> repr (SegMeasure repr)
+  segCount :: repr (SegMeasure repr) -> repr Int
+  segArcLength :: repr (SegMeasure repr) -> repr (I.Interval' repr Scalar)
+  segArcLengthF :: repr (SegMeasure repr) -> repr (Arr repr Scalar (I.Interval' repr Scalar))
+  segOffset :: repr (SegMeasure repr) -> repr (Vector repr Scalar)
+  segEnvelope :: repr (SegMeasure repr) -> repr (Envelope repr)
+  segTrace :: repr (SegMeasure repr) -> repr (Trace repr)
+  default measureSeg :: Spatial repr => repr (Segment repr 'Closed) -> repr (SegMeasure repr)
+  measureSeg s = liftMeasure $ SegMeasure
+    { _segMeasure_count = val 1
+    , _segMeasure_arcLength = arcLengthBounded (stdTolerance %/ val 100) s
+    , _segMeasure_arcLengthF = lam \tol -> arcLengthBounded tol s
+    , _segMeasure_offset = offsetS s
+    , _segMeasure_envelope = envelopeOf s
+    -- TODO: Assume we're 2D so we can have traces
+    , _segMeasure_trace = mempty'
+    }
+  default liftMeasure :: Applicative repr => SegMeasure repr -> repr (SegMeasure repr)
+  liftMeasure = pure
+  default segCount :: Monad repr => repr (SegMeasure repr) -> repr Int
+  segCount = (_segMeasure_count =<<)
+  default segArcLength :: Monad repr => repr (SegMeasure repr) -> repr (I.Interval' repr Scalar)
+  segArcLength = (_segMeasure_arcLength =<<)
+  default segArcLengthF :: Monad repr => repr (SegMeasure repr) -> repr (Arr repr Scalar (I.Interval' repr Scalar))
+  segArcLengthF = (_segMeasure_arcLengthF =<<)
+  default segOffset :: Monad repr => repr (SegMeasure repr) -> repr (Vector repr Scalar)
+  segOffset = (_segMeasure_offset =<<)
+  default segEnvelope :: Monad repr => repr (SegMeasure repr) -> repr (Envelope repr)
+  segEnvelope = (_segMeasure_envelope =<<)
+  default segTrace :: Monad repr => repr (SegMeasure repr) -> repr (Trace repr)
+  segTrace = (_segMeasure_trace =<<)
+
+instance LiftSegMeasure repr => Semigroup' repr (SegMeasure repr) where
+  r1 %<> r2 = liftMeasure $ SegMeasure
+    { _segMeasure_count = segCount r1 %+ segCount r2
+    , _segMeasure_arcLength = segArcLength r1 %+ segArcLength r2
+    -- This is incorrect, but it's what the original diagrams do
+    , _segMeasure_arcLengthF = lam \tol -> (segArcLengthF r1 %$ tol) %+ (segArcLengthF r2 %$ tol)
+    , _segMeasure_offset = segOffset r1 %^+^ segOffset r2
+    , _segMeasure_envelope = segEnvelope r1 %<> actA' (translateBy (segOffset r1)) (segEnvelope r2)
+    , _segMeasure_trace = segTrace r1 %<> actA' (translateBy (segOffset r1)) (segTrace r2)
+    }
+
+instance (Spatial repr, LiftSegMeasure repr) => Monoid' repr (SegMeasure repr) where
+  mempty' = liftMeasure $ SegMeasure
+    { _segMeasure_count = val 0
+    , _segMeasure_arcLength = fromInteger' (val 0)
+    , _segMeasure_arcLengthF = lam \_ -> fromInteger' (val 0)
+    , _segMeasure_offset = zero'
+    , _segMeasure_envelope = mempty'
+    , _segMeasure_trace = mempty'
+    }
+
+segArcLengthBounded :: LiftSegMeasure repr => repr Scalar -> repr (SegMeasure repr) -> repr (I.Interval' repr Scalar)
+segArcLengthBounded tolerance sm =
+  let cached = segArcLength sm
+   in if' (I.width' cached %<= tolerance) cached $ segArcLengthF sm %$ tolerance

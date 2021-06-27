@@ -144,7 +144,7 @@ type SpatialConstraints repr =
    , Numerics repr, Integral' repr Int
    , LiftBool repr
    , LiftMaybe repr, LiftList repr, LiftSet repr, LiftMax repr, LiftMin repr, LiftEndo repr
-   , Val repr Scalar
+   , Val repr Scalar, Val repr Int
    , Val1 repr T.Vector, Val1 repr T.Point, Val1 repr T.LinearTransform, Val1 repr T.AffineTransform
    , LiftRepresentable repr T.Vector, LiftRepresentable repr T.Point
    , Functor' repr (List' repr), Foldable' repr (List' repr)
