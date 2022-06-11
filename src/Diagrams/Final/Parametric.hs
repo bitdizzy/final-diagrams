@@ -22,12 +22,20 @@ instance Lambda repr => Parametric repr (Arr repr a b) a b where
   type PCod (Arr repr a b) = b
   atParam = app
 
-class Parametric repr p (PDom p) (PCod p) => DomainBounds repr p where
+class DomainBounds repr p where
   domainLower :: repr p -> repr (PDom p)
   domainUpper :: repr p -> repr (PDom p)
+
+class DomainBounds repr p => EndValues repr p where
   evalAtLower :: repr p -> repr (PCod p)
-  evalAtLower p = p `atParam` domainLower p
   evalAtUpper :: repr p -> repr (PCod p)
+  default evalAtLower
+    :: Parametric repr p (PDom p) (PCod p)
+    => repr p -> repr (PCod p)
+  evalAtLower p = p `atParam` domainLower p
+  default evalAtUpper
+    :: Parametric repr p (PDom p) (PCod p)
+    => repr p -> repr (PCod p)
   evalAtUpper p = p `atParam` domainUpper p
 
 class (Tuple2 repr, DomainBounds repr p) => Sectionable repr p where

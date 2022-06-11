@@ -11,3 +11,5 @@ import Diagrams.Final.Located as X
 import Diagrams.Final.Parametric as X
 import Diagrams.Final.Points as X
 import Diagrams.Final.Segment as X
+import Diagrams.Final.Tangent as X
+import Diagrams.Final.Trail as X

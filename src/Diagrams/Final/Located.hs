@@ -20,7 +20,7 @@ data Located repr a = Located
   , _located_location :: repr (Point repr Scalar)
   }
 
-class (forall a. Val repr (Located repr a)) => LiftLocated repr where
+class LiftLocated repr where
   locatedAt' :: repr a -> repr (Point repr Scalar) -> repr (Located repr a)
   located' :: repr (Located repr a) -> (repr a -> repr (Point repr Scalar) -> repr r) -> repr r
   default locatedAt' :: Applicative repr => repr a -> repr (Point repr Scalar) -> repr (Located repr a)
@@ -64,8 +64,6 @@ instance
 
 instance
   ( LiftLocated repr
-  , Spatial repr
-  , Parametric repr a (PDom a) (Vector repr Scalar)
   , DomainBounds repr a
   ) => DomainBounds repr (Located repr a) where
   domainLower pl = located' pl $ \p _ -> domainLower p

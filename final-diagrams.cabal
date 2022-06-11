@@ -37,6 +37,8 @@ library
     Diagrams.Final.Points
     Diagrams.Final.Segment
     Diagrams.Final.Solve
+    Diagrams.Final.Tangent
+    Diagrams.Final.Trail
     Diagrams.Final.Trail.Internal
   other-modules:
   other-extensions:

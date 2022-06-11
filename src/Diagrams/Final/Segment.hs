@@ -117,6 +117,8 @@ instance Segments repr => Parametric repr (Segment repr 'Closed) Scalar (Vector 
 instance Segments repr => DomainBounds repr (Segment repr 'Closed) where
   domainLower _ = num 0
   domainUpper _ = num 1
+
+instance Segments repr => EndValues repr (Segment repr 'Closed) where
   evalAtLower _ = zero'
   evalAtUpper = offsetS
 
@@ -246,6 +248,8 @@ instance FixedSegments repr => Parametric repr (FixedSegment repr) Scalar (Point
 instance FixedSegments repr => DomainBounds repr (FixedSegment repr) where
   domainLower _ = num 0
   domainUpper _ = num 1
+
+instance FixedSegments repr => EndValues repr (FixedSegment repr) where
   evalAtLower fs = segmentF' fs $ \case
     FixedLinear p0 _ -> p0
     FixedCubic p0 _ _ _ -> p0
